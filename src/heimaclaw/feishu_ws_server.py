@@ -119,12 +119,7 @@ async def handle_feishu_message(message: Any) -> None:
         )
 
         # 发送回复
-        from heimaclaw.channel.base import OutboundMessage
 
-        outbound = OutboundMessage(
-            user_id=user_id,
-            content=response_text,
-        )
 
         # 获取飞书适配器并发送消息
         # TODO: 需要保存 adapter 引用
