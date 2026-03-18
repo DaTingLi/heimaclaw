@@ -31,7 +31,7 @@ class VsockClient:
         cid: int,
         port: int,
         timeout: int = DEFAULT_TIMEOUT,
-    ):
+    ) -> None:
         """
         初始化 vsock 客户端
 
@@ -88,7 +88,7 @@ class VsockClient:
             self.connect()
 
         # 构建请求
-        request = {
+        request: dict[str, Any] = {
             "command": command,
             "parameters": parameters or {},
         }
@@ -111,12 +111,15 @@ class VsockClient:
         response_data = self._recv_exact(response_length)
 
         # 解析响应
-        response = json.loads(response_data.decode("utf-8"))
+        response: dict[str, Any] = json.loads(response_data.decode("utf-8"))
 
         return response
 
     def _recv_exact(self, length: int) -> bytes:
         """精确接收指定长度的数据"""
+        if self._socket is None:
+            raise ConnectionError("vsock 未连接")
+
         data = b""
         while len(data) < length:
             chunk = self._socket.recv(length - len(data))
@@ -125,15 +128,15 @@ class VsockClient:
             data += chunk
         return data
 
-    def __enter__(self):
+    def __enter__(self) -> "VsockClient":
         """上下文管理器入口"""
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """上下文管理器退出"""
         self.disconnect()
-        return False
+        # return False
 
 
 class VsockCommand:

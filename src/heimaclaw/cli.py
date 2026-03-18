@@ -13,7 +13,7 @@ HeiMaClaw CLI 入口模块
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.table import Table
@@ -351,7 +351,7 @@ def doctor_command() -> None:
     )
 
     # 打印结果
-    print_table("诊断结果", checks, ["检查项", "状态", "详情"])
+    print_table("诊断结果", [list(c) for c in checks], ["检查项", "状态", "详情"])
 
     # 计算健康度
     ok_count = sum(1 for c in checks if "[green]" in c[1])
@@ -446,6 +446,7 @@ def config_set(
         current = current[k]
 
     # 尝试转换值类型
+    parsed_value: Any = value
     try:
         if value.lower() == "true":
             parsed_value = True

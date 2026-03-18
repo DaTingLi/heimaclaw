@@ -165,7 +165,7 @@ app.include_router(monitoring_router)
 
 
 @app.get("/")
-async def root() -> dict:
+async def root() -> dict[str, Any]:
     """健康检查端点"""
     return {
         "name": "HeiMaClaw",
@@ -176,7 +176,7 @@ async def root() -> dict:
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, Any]:
     """健康检查端点"""
     return {"status": "healthy"}
 
@@ -336,7 +336,7 @@ async def wecom_webhook(request: Request) -> Response:
 
 
 @app.get("/api/agents")
-async def list_agents() -> dict:
+async def list_agents() -> dict[str, Any]:
     """列出所有 Agent"""
     agents = []
     for name, runner in _agents.items():
@@ -355,7 +355,7 @@ async def list_agents() -> dict:
 
 
 @app.get("/api/agents/{agent_name}")
-async def get_agent(agent_name: str) -> dict:
+async def get_agent(agent_name: str) -> dict[str, Any]:
     """获取 Agent 详情"""
     runner = _agents.get(agent_name)
 
@@ -377,7 +377,7 @@ async def get_agent(agent_name: str) -> dict:
 
 
 @app.get("/api/sessions")
-async def list_sessions(agent_name: str = "") -> dict:
+async def list_sessions(agent_name: str = "") -> dict[str, Any]:
     """列出活跃会话"""
     sessions = []
 

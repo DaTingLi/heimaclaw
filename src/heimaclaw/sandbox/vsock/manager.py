@@ -5,6 +5,7 @@ vsock 管理器
 """
 
 from pathlib import Path
+from typing import Any
 
 from heimaclaw.console import info
 
@@ -23,7 +24,7 @@ class VsockManager:
     # 默认端口
     DEFAULT_PORT = 1234
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化 vsock 管理器"""
         self._next_cid = self.CID_MIN
         self._allocated_cids: set[int] = set()
@@ -80,7 +81,7 @@ class VsockManager:
         cid: int,
         port: int = DEFAULT_PORT,
         uds_path: str = "/tmp/vsock.sock",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         生成 Firecracker vsock 配置
 

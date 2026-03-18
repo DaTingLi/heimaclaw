@@ -31,7 +31,7 @@ class InstanceInfo:
     memory_mb: int = 128
     cpu_count: int = 1
     vsock_port: int = 0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
 @dataclass

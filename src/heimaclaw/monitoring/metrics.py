@@ -8,7 +8,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from heimaclaw.console import info
 
@@ -81,7 +81,7 @@ class TokenUsageTracker:
         latency_ms: int,
         session_id: Optional[str] = None,
         request_id: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         """
         记录 token 使用
@@ -129,7 +129,7 @@ class TokenUsageTracker:
             ),
         )
 
-        record_id = cursor.lastrowid
+        record_id = cursor.lastrowid or 0
         conn.commit()
         conn.close()
 
@@ -141,7 +141,7 @@ class TokenUsageTracker:
         provider: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         获取 token 使用统计
 
@@ -257,7 +257,7 @@ class TokenUsageTracker:
         self,
         agent_id: Optional[str] = None,
         days: int = 7,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         获取每日使用量
 

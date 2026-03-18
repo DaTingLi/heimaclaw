@@ -49,7 +49,7 @@ class LLMConfig:
     tool_choice: Optional[str] = "auto"
 
     # 额外参数
-    extra_params: dict[str, Any] = field(default_factory=dict)
+    extra_params: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
 @dataclass

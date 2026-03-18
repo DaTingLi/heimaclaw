@@ -192,7 +192,7 @@ class FeishuAdapter(ChannelAdapter):
 
         raise ValueError(f"未知的事件类型: {event_type}")
 
-    def _extract_message_content(self, message: dict) -> str:
+    def _extract_message_content(self, message: dict[str, Any]) -> str:
         """
         提取消息内容
 

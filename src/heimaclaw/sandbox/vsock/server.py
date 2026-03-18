@@ -11,7 +11,7 @@ import socket
 import struct
 import subprocess
 import threading
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from heimaclaw.console import error, info
 
@@ -38,8 +38,8 @@ class VsockServer:
     def __init__(
         self,
         port: int = DEFAULT_PORT,
-        handler: Optional[Callable[[dict], dict]] = None,
-    ):
+        handler: Optional[Callable[..., [dict[str, Any]], dict[str, Any]]] = None,
+    ) -> None:
         """
         初始化 vsock 服务端
 
@@ -99,7 +99,7 @@ class VsockServer:
     def _handle_connection(
         self,
         conn: socket.socket,
-        addr: tuple,
+        addr: tuple[int, int],
     ) -> None:
         """
         处理单个连接
@@ -123,7 +123,7 @@ class VsockServer:
                     break
 
                 # 解析请求
-                request = json.loads(data.decode("utf-8"))
+                request: dict[str, Any] = json.loads(data.decode("utf-8"))
 
                 # 处理请求
                 response = self.handler(request)
@@ -149,7 +149,7 @@ class VsockServer:
             data += chunk
         return data
 
-    def _default_handler(self, request: dict) -> dict:
+    def _default_handler(self, request: dict[str, Any]) -> dict[str, Any]:
         """
         默认命令处理函数
 
@@ -173,7 +173,7 @@ class VsockServer:
                 "error": f"未知命令类型: {request_type}",
             }
 
-    def _handle_execute(self, request: dict) -> dict:
+    def _handle_execute(self, request: dict[str, Any]) -> dict[str, Any]:
         """
         处理命令执行请求
 
@@ -223,7 +223,7 @@ class VsockServer:
                 "error": str(e),
             }
 
-    def _handle_get_info(self) -> dict:
+    def _handle_get_info(self) -> dict[str, Any]:
         """
         处理信息查询请求
 
@@ -242,7 +242,7 @@ class VsockServer:
         }
 
 
-def main():
+def main() -> None:
     """vsock 服务端入口函数"""
     import argparse
 

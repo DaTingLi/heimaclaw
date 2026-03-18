@@ -27,7 +27,7 @@ class Message:
     timestamp: float
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
@@ -51,7 +51,7 @@ class Session:
     created_at: float
     updated_at: float
     messages: list[Message] = field(default_factory=list)
-    context: dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict[str, Any])
     sandbox_instance_id: Optional[str] = None
 
     def to_context(self) -> SessionContext:

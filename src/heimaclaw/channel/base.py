@@ -22,7 +22,7 @@ class InboundMessage:
     content: str
     message_type: str  # text / post / interactive
     timestamp: float
-    raw_data: dict[str, Any] = field(default_factory=dict)
+    raw_data: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
 @dataclass
