@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from heimaclaw.config.compiler import ConfigCompiler
-from heimaclaw.config.markdown_parser import MarkdownParser
 
 
 @pytest.fixture
@@ -29,7 +28,9 @@ def sample_agents_dir():
             "llm": {"provider": "glm", "model_name": "glm-4-flash"},
         }
 
-        (agent_dir / "agent.json").write_text(json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8")
+        (agent_dir / "agent.json").write_text(
+            json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
         # 创建 SOUL.md
         soul_content = """# SOUL.md
@@ -59,7 +60,9 @@ async def test_compile_agent(sample_agents_dir):
     assert success
 
     # 检查编译后的文件是否存在
-    compiled_file = sample_agents_dir / "test-agent" / ".compiled" / "agent.compiled.json"
+    compiled_file = (
+        sample_agents_dir / "test-agent" / ".compiled" / "agent.compiled.json"
+    )
     assert compiled_file.exists()
 
     # 检查内容
@@ -106,7 +109,10 @@ def test_generate_system_prompt(sample_agents_dir):
 
     markdown_config = {
         "identity": {"name": "Test Agent", "creature": "AI", "atmosphere": "友好"},
-        "soul": {"core_positioning": "测试定位", "core_capabilities": [{"category": "对话", "description": "回答问题"}]},
+        "soul": {
+            "core_positioning": "测试定位",
+            "core_capabilities": [{"category": "对话", "description": "回答问题"}],
+        },
     }
 
     prompt = compiler._generate_system_prompt(markdown_config)

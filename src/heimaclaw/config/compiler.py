@@ -141,7 +141,9 @@ class ConfigCompiler:
             error(f"解析 agent.json 失败: {e}")
             return None
 
-    def _merge_configs(self, base_config: dict[str, Any], markdown_config: dict[str, Any]) -> dict[str, Any]:
+    def _merge_configs(
+        self, base_config: dict[str, Any], markdown_config: dict[str, Any]
+    ) -> dict[str, Any]:
         """合并基础配置和 Markdown 配置"""
         merged = {
             "metadata": base_config,
@@ -256,7 +258,9 @@ class ConfigCompiler:
         config_file = compiled_dir / "agent.compiled.json"
 
         try:
-            config_file.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+            config_file.write_text(
+                json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             return True
         except Exception as e:
             error(f"保存编译配置失败: {e}")
@@ -271,6 +275,8 @@ class ConfigCompiler:
         hashes_file = compiled_dir / "hashes.json"
 
         try:
-            hashes_file.write_text(json.dumps(hashes, ensure_ascii=False, indent=2), encoding="utf-8")
+            hashes_file.write_text(
+                json.dumps(hashes, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
         except Exception as e:
             warning(f"保存哈希失败: {e}")

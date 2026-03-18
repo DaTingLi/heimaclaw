@@ -150,9 +150,9 @@ class FeishuAdapter(ChannelAdapter):
 
             url = f"{self.base_url}/im/v1/messages"
             params = {
-                "receive_id_type": "open_id"
-                if message.user_id.startswith("ou_")
-                else "chat_id",
+                "receive_id_type": (
+                    "open_id" if message.user_id.startswith("ou_") else "chat_id"
+                ),
             }
 
             headers = {
@@ -210,9 +210,9 @@ class FeishuAdapter(ChannelAdapter):
 
             url = f"{self.base_url}/im/v1/messages"
             params = {
-                "receive_id_type": "open_id"
-                if user_id.startswith("ou_")
-                else "chat_id",
+                "receive_id_type": (
+                    "open_id" if user_id.startswith("ou_") else "chat_id"
+                ),
             }
 
             headers = {

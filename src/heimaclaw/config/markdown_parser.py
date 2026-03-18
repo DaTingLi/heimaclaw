@@ -225,8 +225,6 @@ class MarkdownParser:
         # 解析工作场景
         work_text = self._extract_section(content, "工作场景")
         config.work_scenarios = self._parse_list(work_text)
-        content = memory_file.read_text(encoding="utf-8")
-        config = MemoryConfig()
 
         # 解析核心定位
         config.core_positioning = self._extract_section(content, "核心定位")
@@ -252,23 +250,24 @@ class MarkdownParser:
     def _extract_section(self, content: str, section_name: str) -> str:
         """提取章节内容"""
         import re
-        lines = content.split('\n')
+
+        lines = content.split("\n")
         in_section = False
         section_lines = []
-        
+
         for line in lines:
             # 检查是否是章节标题
-            if re.match(r'^#+\s*' + re.escape(section_name), line, re.IGNORECASE):
+            if re.match(r"^#+\s*" + re.escape(section_name), line, re.IGNORECASE):
                 in_section = True
                 continue
-            
+
             if in_section:
                 # 遇到下一个章节标题，停止
-                if re.match(r'^#+\s+', line):
+                if re.match(r"^#+\s+", line):
                     break
                 section_lines.append(line)
-        
-        return '\n'.join(section_lines).strip()
+
+        return "\n".join(section_lines).strip()
 
     def _extract_field(self, content: str, field_name: str) -> str:
         """提取字段值"""
@@ -303,7 +302,12 @@ class MarkdownParser:
             # 匹配能力项
             item_match = re.match(r"^\s*[-*]\s+(.+)", line)
             if item_match and current_category:
-                capabilities.append({"category": current_category, "description": item_match.group(1).strip()})
+                capabilities.append(
+                    {
+                        "category": current_category,
+                        "description": item_match.group(1).strip(),
+                    }
+                )
 
         return capabilities
 
@@ -337,7 +341,12 @@ class MarkdownParser:
                 if current_tool:
                     tools.append(current_tool)
                 tool_name = tool_match.group(2).strip()
-                current_tool = {"name": tool_name, "description": "", "usage": "", "examples": []}
+                current_tool = {
+                    "name": tool_name,
+                    "description": "",
+                    "usage": "",
+                    "examples": [],
+                }
                 continue
 
             # 匹配工具描述
@@ -375,7 +384,9 @@ class MarkdownParser:
             # 匹配事件
             event_match = re.match(r"^\s*[-*]\s+(.+)", line)
             if event_match and current_date:
-                events.append({"date": current_date, "event": event_match.group(1).strip()})
+                events.append(
+                    {"date": current_date, "event": event_match.group(1).strip()}
+                )
 
         return events
 

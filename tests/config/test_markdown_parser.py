@@ -8,12 +8,7 @@ from pathlib import Path
 import pytest
 
 from heimaclaw.config.markdown_parser import (
-    IdentityConfig,
     MarkdownParser,
-    MemoryConfig,
-    SoulConfig,
-    ToolsConfig,
-    UserConfig,
 )
 
 

@@ -606,9 +606,11 @@ def agent_list() -> None:
                     [
                         config.get("name", agent_dir.name),
                         config.get("channel", "-"),
-                        "[green]启用[/green]"
-                        if config.get("enabled")
-                        else "[dim]禁用[/dim]",
+                        (
+                            "[green]启用[/green]"
+                            if config.get("enabled")
+                            else "[dim]禁用[/dim]"
+                        ),
                         config.get("description", "-")[:30],
                     ]
                 )
@@ -764,9 +766,11 @@ def tool_list() -> None:
         table.add_row(
             tool.name,
             tool.version,
-            tool.description[:30] + "..."
-            if len(tool.description) > 30
-            else tool.description,
+            (
+                tool.description[:30] + "..."
+                if len(tool.description) > 30
+                else tool.description
+            ),
             str(len(tool.functions)),
             status,
         )
@@ -1307,7 +1311,9 @@ def session_clear_all(
 
 @agent_app.command("compile")
 def agent_compile(
-    agent_name: Optional[str] = typer.Argument(None, help="Agent 名称（不指定则编译所有）"),
+    agent_name: Optional[str] = typer.Argument(
+        None, help="Agent 名称（不指定则编译所有）"
+    ),
     force: bool = typer.Option(False, "--force", "-f", help="强制重新编译"),
     watch: bool = typer.Option(False, "--watch", "-w", help="监听模式（自动编译）"),
 ) -> None:
@@ -1400,8 +1406,8 @@ def agent_compile(
                 raise typer.Exit(1)
 
 
-@agent_app.command("create")
-def agent_create(
+@agent_app.command("create-md")
+def agent_create_markdown(
     name: str = typer.Argument(..., help="Agent 名称"),
     template: str = typer.Option("default", "--template", "-t", help="模板名称"),
 ) -> None:
@@ -1413,8 +1419,6 @@ def agent_create(
         heimaclaw agent create my-agent --template advanced
     """
     from pathlib import Path
-
-    from heimaclaw.console import print_panel
 
     # Agent 目录
     agents_dir = Path.home() / ".heimaclaw" / "agents"
@@ -1445,7 +1449,9 @@ def agent_create(
     import json
 
     config_file = agent_dir / "agent.json"
-    config_file.write_text(json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8")
+    config_file.write_text(
+        json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     # 创建示例 Markdown 配置
     create_sample_markdown_configs(agent_dir, name)
