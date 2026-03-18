@@ -203,3 +203,37 @@ heimaclaw tool create <name>      # 创建模板
 ### 示例工具
 - sysinfo: 系统信息查询（get_system_info, get_disk_usage）
 - weather: 示例工具（weather_example）
+
+## 生产部署完成
+
+### 部署组件
+- [x] systemd 服务配置
+- [x] 开机自启
+- [x] 资源限制
+- [x] 日志轮转配置
+
+### Token 监控系统
+- [x] TokenUsageTracker（SQLite 存储）
+- [x] 每次 LLM 调用自动记录
+- [x] 按时间/Agent/提供商过滤
+- [x] 每日使用量查询
+- [x] 旧记录自动清理
+
+### 监控 API 端点
+```
+GET /api/monitoring/health        - 健康检查
+GET /api/monitoring/token-stats   - Token 统计
+GET /api/monitoring/daily-usage   - 每日使用量
+GET /api/monitoring/agent-usage/{id} - Agent 统计
+```
+
+### 监控 CLI 命令
+```bash
+heimaclaw monitoring token-stats  - Token 统计
+heimaclaw monitoring daily-usage  - 每日使用量
+heimaclaw monitoring clear-old    - 清理旧记录
+```
+
+### 部署文档
+- deploy/README.md（完整部署指南）
+- deploy/heimaclaw.service（systemd 配置）
