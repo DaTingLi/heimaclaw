@@ -956,3 +956,135 @@ heimaclaw tool install /path/to/heimaclaw-tool-{name}
     info(f"  1. 编辑 {tool_dir}/main.py 实现功能")
     info(f"  2. 编辑 {tool_dir}/tool.json 添加更多函数")
     info(f"  3. 安装: heimaclaw tool install {tool_dir}")
+
+
+# ==================== monitoring 子命令 ====================
+
+monitoring_app = typer.Typer(help="监控和统计命令")
+app.add_typer(monitoring_app, name="monitoring")
+
+
+@monitoring_app.command("token-stats")
+def monitoring_token_stats(
+    agent_id: Optional[str] = typer.Option(None, "--agent", "-a", help="过滤 Agent ID"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="过滤提供商"),
+    days: int = typer.Option(7, "--days", "-d", help="统计最近多少天"),
+) -> None:
+    """
+    显示 token 使用统计
+    """
+    from datetime import datetime, timedelta
+
+    from rich.table import Table
+
+    from heimaclaw.monitoring.metrics import get_token_tracker
+
+    tracker = get_token_tracker()
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.now().strftime("%Y-%m-%d")
+
+    stats = tracker.get_stats(
+        agent_id=agent_id,
+        provider=provider,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    # 总体统计
+    table = Table(title=f"Token 使用统计（最近 {days} 天）")
+    table.add_column("指标")
+    table.add_column("值")
+
+    table.add_row("请求次数", str(stats["request_count"]))
+    table.add_row("总输入 Token", f"{stats['total_prompt_tokens']:,}")
+    table.add_row("总输出 Token", f"{stats['total_completion_tokens']:,}")
+    table.add_row("总 Token", f"{stats['total_tokens']:,}")
+    table.add_row("平均延迟", f"{stats['avg_latency_ms']}ms")
+    table.add_row("最小延迟", f"{stats['min_latency_ms']}ms")
+    table.add_row("最大延迟", f"{stats['max_latency_ms']}ms")
+
+    console.print(table)
+
+    # 按提供商统计
+    if stats["by_provider"]:
+        provider_table = Table(title="按提供商统计")
+        provider_table.add_column("提供商")
+        provider_table.add_column("请求次数")
+        provider_table.add_column("Token 数")
+
+        for item in stats["by_provider"]:
+            provider_table.add_row(
+                item["provider"],
+                str(item["count"]),
+                f"{item['tokens']:,}",
+            )
+
+        console.print(provider_table)
+
+    # 按模型统计
+    if stats["by_model"]:
+        model_table = Table(title="按模型统计（Top 10）")
+        model_table.add_column("模型")
+        model_table.add_column("请求次数")
+        model_table.add_column("Token 数")
+
+        for item in stats["by_model"]:
+            model_table.add_row(
+                item["model"],
+                str(item["count"]),
+                f"{item['tokens']:,}",
+            )
+
+        console.print(model_table)
+
+
+@monitoring_app.command("daily-usage")
+def monitoring_daily_usage(
+    agent_id: Optional[str] = typer.Option(None, "--agent", "-a", help="过滤 Agent ID"),
+    days: int = typer.Option(7, "--days", "-d", help="查询最近多少天"),
+) -> None:
+    """
+    显示每日使用量
+    """
+    from rich.table import Table
+
+    from heimaclaw.monitoring.metrics import get_token_tracker
+
+    tracker = get_token_tracker()
+    usage = tracker.get_daily_usage(agent_id=agent_id, days=days)
+
+    if not usage:
+        info("暂无使用记录")
+        return
+
+    table = Table(title=f"每日使用量（最近 {days} 天）")
+    table.add_column("日期")
+    table.add_column("请求次数")
+    table.add_column("Token 数")
+    table.add_column("平均延迟")
+
+    for item in usage:
+        table.add_row(
+            item["date"],
+            str(item["request_count"]),
+            f"{item['total_tokens']:,}",
+            f"{item['avg_latency_ms']}ms",
+        )
+
+    console.print(table)
+
+
+@monitoring_app.command("clear-old")
+def monitoring_clear_old(
+    days: int = typer.Option(90, "--days", "-d", help="保留最近多少天的数据"),
+) -> None:
+    """
+    清理旧的使用记录
+    """
+    from heimaclaw.monitoring.metrics import get_token_tracker
+
+    tracker = get_token_tracker()
+    deleted = tracker.clear_old_records(days)
+
+    success(f"已清理 {deleted} 条旧记录（保留 {days} 天内数据）")

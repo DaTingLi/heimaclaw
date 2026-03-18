@@ -20,6 +20,9 @@ from heimaclaw.llm.base import LLMProvider
 # LLM 相关导入
 from heimaclaw.llm.base import Message as LLMMessage
 from heimaclaw.llm.registry import get_llm_registry
+
+# 监控导入
+from heimaclaw.monitoring.metrics import record_token_usage
 from heimaclaw.sandbox.base import SandboxBackend
 from heimaclaw.sandbox.firecracker import FirecrackerBackend
 from heimaclaw.sandbox.pool import WarmPool
@@ -342,20 +345,38 @@ class AgentRunner:
                 llm_messages.append(llm_msg)
 
             # 调用 LLM
+            import time
+
+            start_time = time.time()
+
             registry = get_llm_registry()
             response = await registry.chat(
                 llm_messages, adapter_name=self._llm_adapter_name
             )
 
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            # 记录 token 使用
+            record_token_usage(
+                agent_id=self.agent_id,
+                provider=response.provider.value,
+                model=response.model,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                latency_ms=latency_ms,
+            )
+
             # 转换响应
             result = {
                 "content": response.content,
-                "tool_calls": [tc.to_dict() for tc in response.tool_calls]
-                if response.tool_calls
-                else None,
+                "tool_calls": (
+                    [tc.to_dict() for tc in response.tool_calls]
+                    if response.tool_calls
+                    else None
+                ),
             }
 
-            info(f"LLM 响应: {response.total_tokens} tokens, {response.latency_ms}ms")
+            info(f"LLM 响应: {response.total_tokens} tokens, {latency_ms}ms")
 
             return result
 
@@ -418,13 +439,13 @@ class AgentRunner:
 
         return history
 
-    async def _execute_tool_in_sandbox(
+    async def _execute_tool(
         self,
         tool_name: str,
         parameters: dict[str, Any],
     ) -> Any:
         """
-        在沙箱中执行工具
+        执行工具
 
         参数:
             tool_name: 工具名称
@@ -433,28 +454,6 @@ class AgentRunner:
         返回:
             工具执行结果
         """
-        # 如果启用沙箱，在沙箱中执行
-        if self._sandbox_instance_id and self.sandbox_backend:
-            # 构建执行命令
-            cmd = f"heimaclaw-tool {tool_name} '{json.dumps(parameters)}'"
-
-            result = await self.sandbox_backend.execute(
-                instance_id=self._sandbox_instance_id,
-                command=cmd,
-            )
-
-            if result.exit_code == 0:
-                return {
-                    "success": True,
-                    "result": json.loads(result.stdout),
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": result.stderr,
-                }
-
-        # 否则直接执行
         return await self.tool_registry.execute(tool_name, parameters)
 
     def set_api_key(self, api_key: str) -> None:

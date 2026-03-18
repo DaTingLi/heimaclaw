@@ -17,6 +17,7 @@ from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.console import agent_event, error, info
 from heimaclaw.interfaces import AgentConfig, ChannelType
+from heimaclaw.server_monitoring import router as monitoring_router
 
 # 全局状态
 _agents: dict[str, AgentRunner] = {}
@@ -159,6 +160,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 注册监控路由
+app.include_router(monitoring_router)
+
 
 @app.get("/")
 async def root() -> dict:
@@ -232,11 +236,11 @@ async def feishu_webhook(request: Request) -> Response:
 
         # 发送响应
 
-        session = runner.session_manager.get(
-            await _get_last_session_id(runner, inbound_msg.user_id)
-        )
+        sessions = await runner.session_manager.list_active()
+        user_sessions = [s for s in sessions if s.user_id == inbound_msg.user_id]
 
-        if session:
+        if user_sessions:
+            session = user_sessions[-1]
             await adapter.send_message(
                 session.to_context(),
                 response,
@@ -311,11 +315,11 @@ async def wecom_webhook(request: Request) -> Response:
 
         # 发送响应
 
-        session = runner.session_manager.get(
-            await _get_last_session_id(runner, inbound_msg.user_id)
-        )
+        sessions = await runner.session_manager.list_active()
+        user_sessions = [s for s in sessions if s.user_id == inbound_msg.user_id]
 
-        if session:
+        if user_sessions:
+            session = user_sessions[-1]
             await adapter.send_message(
                 session.to_context(),
                 response,

@@ -1,0 +1,22 @@
+[Unit]
+Description=HeiMaClaw AI Agent Platform
+Documentation=https://github.com/DaTingLi/heimaclaw
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/heimaclaw
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/local/bin/heimaclaw start --host 0.0.0.0 --port 8000
+
+# 自动重启
+Restart=on-failure
+RestartSec=5s
+
+# 资源限制
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
