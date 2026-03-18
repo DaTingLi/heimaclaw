@@ -50,7 +50,7 @@
 - [x] 工具注册/执行（装饰器模式）
 - [x] OpenAI 格式工具定义
 - [x] 消息处理循环框架
-- [ ] LLM 调用实现（OpenAI/Claude/GLM）
+- [ ] LLM 调用集成（已实现，待联调）
 - [ ] 沙箱中工具执行
 
 ### 渠道适配器模块（接口完成度 60%）
@@ -62,6 +62,21 @@
 - [ ] 完整的消息发送测试
 - [ ] 卡片消息完整实现
 - [ ] 企业微信消息解密
+
+### LLM 集成模块（接口完成度 90%）
+- [x] LLMAdapter 抽象基类
+- [x] OpenAICompatibleAdapter（OpenAI 兼容）
+- [x] OpenAI 适配器
+- [x] Claude 适配器
+- [x] GLM 智谱适配器
+- [x] DeepSeek 适配器
+- [x] Qwen 通义千问适配器
+- [x] vLLM 自定义部署适配器
+- [x] Ollama 本地模型适配器
+- [x] LLMRegistry 注册表
+- [x] 工具调用支持
+- [x] 流式输出
+- [ ] 完整测试覆盖
 
 ### FastAPI 服务骨架（接口完成度 50%）
 - [x] 基础 FastAPI 应用
@@ -84,30 +99,38 @@
 - [x] NO_COLOR 支持
 - [x] 表格/面板输出
 
-## 待启动模块
-
-### LLM 集成模块（接口完成度 0%）
-- [ ] OpenAI 适配器
-- [ ] Claude 适配器
-- [ ] GLM 适配器
-- [ ] 多模型切换
-
 ## 当前活跃分支
 - master
 
 ## 下一步意图
-1. 完善 LLM 调用实现（OpenAI 优先）
-2. 完善渠道适配器消息发送
-3. 安装 Firecracker 实现 microVM 完整隔离
+1. 集成测试：Agent 运行时 + LLM + 渠道
+2. 完善 Firecracker microVM 隔离
+3. 实现完整的消息处理链路
 
 ## 关键指标
-- 已定义接口数：6
-- 已实现接口数：6（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner、ChannelAdapter）
+- 已定义接口数：7
+- 已实现接口数：7（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner、ChannelAdapter、LLMAdapter）
 - 阻塞项：0
-- 代码行数：约 5500+ 行
+- 代码行数：约 7000+ 行
 
 ## 模块 SPEC 文档
 - [x] CLI 模块 SPEC
 - [x] 沙箱模块 SPEC
 - [x] Agent 运行时 SPEC
 - [x] 渠道适配器 SPEC
+- [x] LLM 集成 SPEC
+
+## LLM 支持矩阵
+
+| 厂商 | Provider | 模型示例 | API 格式 | 状态 |
+|------|----------|---------|---------|------|
+| **国内** |
+| 智谱 GLM | `glm` | glm-4 | OpenAI 兼容 | 已实现 |
+| DeepSeek | `deepseek` | deepseek-chat | OpenAI 兼容 | 已实现 |
+| 通义千问 | `qwen` | qwen-turbo | OpenAI 兼容 | 已实现 |
+| **国外** |
+| OpenAI | `openai` | gpt-4 | 原生 | 已实现 |
+| Claude | `claude` | claude-3-sonnet | 原生 | 已实现 |
+| **自定义** |
+| vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 已实现 |
+| Ollama | `ollama` | llama2 | OpenAI 兼容 | 已实现 |
