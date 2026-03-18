@@ -694,3 +694,265 @@ def _setup_wecom() -> None:
 
 if __name__ == "__main__":
     app()
+
+
+# ==================== tool 子命令 ====================
+
+tool_app = typer.Typer(help="工具管理命令")
+app.add_typer(tool_app, name="tool")
+
+
+@tool_app.command("install")
+def tool_install(
+    source: str = typer.Argument(..., help="工具源（本地路径/Git URL/PyPI 包名）"),
+) -> None:
+    """
+    安装工具
+
+    支持三种安装方式：
+    - 本地目录: heimaclaw tool install /path/to/tool
+    - Git 仓库: heimaclaw tool install https://github.com/xxx/tool
+    - PyPI 包: heimaclaw tool install heimaclaw-tool-xxx
+    """
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    success = manager.install(source)
+
+    if not success:
+        raise typer.Exit(1)
+
+
+@tool_app.command("uninstall")
+def tool_uninstall(
+    name: str = typer.Argument(..., help="工具名称"),
+) -> None:
+    """
+    卸载工具
+    """
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    success = manager.uninstall(name)
+
+    if not success:
+        raise typer.Exit(1)
+
+
+@tool_app.command("list")
+def tool_list() -> None:
+    """
+    列出已安装的工具
+    """
+    from rich.table import Table
+
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    tools = manager.list()
+
+    table = Table(title="已安装工具", show_header=True, header_style="cyan bold")
+    table.add_column("名称")
+    table.add_column("版本")
+    table.add_column("描述")
+    table.add_column("函数数")
+    table.add_column("状态")
+
+    for tool in tools:
+        status = "[green]启用[/green]" if tool.enabled else "[dim]禁用[/dim]"
+        table.add_row(
+            tool.name,
+            tool.version,
+            tool.description[:30] + "..."
+            if len(tool.description) > 30
+            else tool.description,
+            str(len(tool.functions)),
+            status,
+        )
+
+    if not tools:
+        info("暂无已安装的工具")
+    else:
+        console.print(table)
+
+
+@tool_app.command("info")
+def tool_info(
+    name: str = typer.Argument(..., help="工具名称"),
+) -> None:
+    """
+    显示工具详细信息
+    """
+
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    tool = manager.get(name)
+
+    if not tool:
+        error(f"工具不存在: {name}")
+        raise typer.Exit(1)
+
+    # 显示工具信息
+    info_text = f"""名称: {tool.name}
+版本: {tool.version}
+路径: {tool.path}
+状态: {"启用" if tool.enabled else "禁用"}
+
+描述:
+{tool.description}
+
+函数列表:"""
+
+    for func in tool.functions:
+        info_text += (
+            f"\n  - {func.get('name', 'unknown')}: {func.get('description', '')}"
+        )
+
+    print_panel(info_text, title_str=f"工具信息: {name}")
+
+
+@tool_app.command("enable")
+def tool_enable(
+    name: str = typer.Argument(..., help="工具名称"),
+) -> None:
+    """启用工具"""
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    if manager.enable(name):
+        success(f"已启用工具: {name}")
+    else:
+        error(f"工具不存在: {name}")
+        raise typer.Exit(1)
+
+
+@tool_app.command("disable")
+def tool_disable(
+    name: str = typer.Argument(..., help="工具名称"),
+) -> None:
+    """禁用工具"""
+    from heimaclaw.tool.manager import get_tool_manager
+
+    manager = get_tool_manager()
+    if manager.disable(name):
+        success(f"已禁用工具: {name}")
+    else:
+        error(f"工具不存在: {name}")
+        raise typer.Exit(1)
+
+
+@tool_app.command("create")
+def tool_create(
+    name: str = typer.Argument(..., help="工具名称"),
+    path: str = typer.Option(".", "--path", "-p", help="创建路径"),
+) -> None:
+    """
+    创建工具模板
+
+    创建一个新的工具包模板，包含必要的文件结构。
+    """
+    import json
+    from pathlib import Path
+
+    tool_dir = Path(path) / f"heimaclaw-tool-{name}"
+
+    if tool_dir.exists():
+        error(f"目录已存在: {tool_dir}")
+        raise typer.Exit(1)
+
+    tool_dir.mkdir(parents=True)
+
+    # 创建 tool.json
+    tool_json = {
+        "name": name,
+        "version": "1.0.0",
+        "description": f"{name} 工具",
+        "entry": "main.py",
+        "functions": [
+            {
+                "name": f"{name}_example",
+                "description": "示例函数",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string", "description": "输入参数"}
+                    },
+                    "required": ["input"],
+                },
+                "timeout_ms": 5000,
+            }
+        ],
+    }
+
+    with open(tool_dir / "tool.json", "w", encoding="utf-8") as f:
+        json.dump(tool_json, f, indent=2, ensure_ascii=False)
+
+    # 创建 main.py
+    main_py = f'''"""
+{name} 工具实现
+"""
+
+
+def {name}_example(input: str) -> str:
+    """
+    示例函数
+
+    参数:
+        input: 输入参数
+
+    返回:
+        处理结果
+    """
+    return f"处理结果: {{input}}"
+'''
+
+    with open(tool_dir / "main.py", "w", encoding="utf-8") as f:
+        f.write(main_py)
+
+    # 创建 SKILL.md
+    skill_md = f"""# {name} 工具
+
+## 概述
+
+{tool_json["description"]}
+
+## 安装
+
+```bash
+heimaclaw tool install /path/to/heimaclaw-tool-{name}
+```
+
+## 函数
+
+### {name}_example
+
+示例函数
+
+**参数:**
+- input (string): 输入参数
+
+**返回:**
+- 处理结果字符串
+
+## 使用示例
+
+```python
+# 在 Agent 中使用
+# 工具会自动加载到 Agent 的工具注册表
+```
+
+## 版本历史
+
+### v1.0.0
+- 初始版本
+"""
+
+    with open(tool_dir / "SKILL.md", "w", encoding="utf-8") as f:
+        f.write(skill_md)
+
+    success(f"工具模板创建成功: {tool_dir}")
+    info("下一步:")
+    info(f"  1. 编辑 {tool_dir}/main.py 实现功能")
+    info(f"  2. 编辑 {tool_dir}/tool.json 添加更多函数")
+    info(f"  3. 安装: heimaclaw tool install {tool_dir}")
