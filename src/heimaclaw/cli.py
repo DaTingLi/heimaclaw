@@ -1300,3 +1300,265 @@ def session_clear_all(
         success("已清除所有会话")
     else:
         info("暂无会话记录")
+
+
+# ==================== 编译命令 ====================
+
+
+@agent_app.command("compile")
+def agent_compile(
+    agent_name: Optional[str] = typer.Argument(None, help="Agent 名称（不指定则编译所有）"),
+    force: bool = typer.Option(False, "--force", "-f", help="强制重新编译"),
+    watch: bool = typer.Option(False, "--watch", "-w", help="监听模式（自动编译）"),
+) -> None:
+    """
+    编译 Agent 配置
+
+    将 Markdown 配置编译为高性能的 JSON 配置。
+
+    示例:
+        heimaclaw agent compile              # 编译所有 agent
+        heimaclaw agent compile my-agent     # 编译指定 agent
+        heimaclaw agent compile --force      # 强制重新编译
+        heimaclaw agent compile --watch      # 监听模式
+    """
+    import asyncio
+    from pathlib import Path
+
+    from heimaclaw.config.compiler import ConfigCompiler
+
+    # 获取 agents 目录
+    agents_dir = Path.home() / ".heimaclaw" / "agents"
+
+    if not agents_dir.exists():
+        error("Agents 目录不存在，请先运行 'heimaclaw init' 初始化")
+        raise typer.Exit(1)
+
+    compiler = ConfigCompiler(agents_dir)
+
+    if watch:
+        # 监听模式
+        title("监听模式")
+        info("监听配置文件变化...")
+        info("按 Ctrl+C 退出")
+
+        async def watch_and_compile():
+            import asyncio
+
+            try:
+                while True:
+                    # 初始编译
+                    if agent_name:
+                        await compiler.compile_agent(agent_name, force=True)
+                    else:
+                        results = await compiler.compile_all(force=force)
+                        success_count = sum(1 for v in results.values() if v)
+                        total_count = len(results)
+                        info(f"编译完成: {success_count}/{total_count}")
+
+                    # 每 5 秒检查一次
+                    await asyncio.sleep(5)
+            except KeyboardInterrupt:
+                info("停止监听")
+
+        try:
+            asyncio.run(watch_and_compile())
+        except KeyboardInterrupt:
+            pass
+    else:
+        # 单次编译
+        if agent_name:
+            # 编译单个 agent
+            success_flag = asyncio.run(compiler.compile_agent(agent_name, force))
+            if not success_flag:
+                raise typer.Exit(1)
+        else:
+            # 编译所有 agent
+            title("编译所有 Agent")
+            results = asyncio.run(compiler.compile_all(force))
+
+            # 显示结果
+            success_count = sum(1 for v in results.values() if v)
+            total_count = len(results)
+
+            if total_count == 0:
+                warning("没有找到需要编译的 Agent")
+                return
+
+            # 打印结果表格
+            table = Table(title=f"编译结果 ({success_count}/{total_count})")
+            table.add_column("Agent", style="cyan")
+            table.add_column("状态", style="magenta")
+
+            for name, result in results.items():
+                status = "✅ 成功" if result else "❌ 失败"
+                table.add_row(name, status)
+
+            console.print(table)
+
+            if success_count < total_count:
+                raise typer.Exit(1)
+
+
+@agent_app.command("create")
+def agent_create(
+    name: str = typer.Argument(..., help="Agent 名称"),
+    template: str = typer.Option("default", "--template", "-t", help="模板名称"),
+) -> None:
+    """
+    创建新 Agent
+
+    示例:
+        heimaclaw agent create my-agent
+        heimaclaw agent create my-agent --template advanced
+    """
+    from pathlib import Path
+
+    from heimaclaw.console import print_panel
+
+    # Agent 目录
+    agents_dir = Path.home() / ".heimaclaw" / "agents"
+    agent_dir = agents_dir / name
+
+    if agent_dir.exists():
+        error(f"Agent '{name}' 已存在")
+        raise typer.Exit(1)
+
+    # 创建目录
+    agent_dir.mkdir(parents=True, exist_ok=True)
+
+    # 创建基础配置
+    base_config = {
+        "name": name,
+        "description": f"{name} Agent",
+        "channel": "feishu",
+        "enabled": True,
+        "sandbox": {"enabled": False, "memory_mb": 128, "cpu_count": 1},
+        "llm": {
+            "provider": "glm",
+            "model_name": "glm-4-flash",
+            "temperature": 0.7,
+            "max_tokens": 4096,
+        },
+    }
+
+    import json
+
+    config_file = agent_dir / "agent.json"
+    config_file.write_text(json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 创建示例 Markdown 配置
+    create_sample_markdown_configs(agent_dir, name)
+
+    success(f"Agent '{name}' 创建成功")
+    info(f"位置: {agent_dir}")
+    info("下一步:")
+    info("  1. 编辑配置文件（SOUL.md, TOOLS.md, IDENTITY.md 等）")
+    info(f"  2. 运行 'heimaclaw agent compile {name}' 编译配置")
+    info("  3. 运行 'heimaclaw start' 启动服务")
+
+
+def create_sample_markdown_configs(agent_dir: Path, name: str) -> None:
+    """创建示例 Markdown 配置文件"""
+
+    # SOUL.md
+    soul_content = f"""# SOUL.md - 核心身份认知
+
+_{name} 的核心定位和能力_
+
+## 🎯 核心定位
+
+**{name}** 是一个通用 AI 助手，致力于为用户提供高效、专业的服务。
+
+## 💪 核心能力
+
+### 对话交互
+- 理解用户意图，提供精准回答
+- 保持友好的对话氛围
+- 记住上下文，提供连贯服务
+
+### 任务执行
+- 执行用户指定的任务
+- 提供进度反馈
+- 处理异常情况
+
+## 🤝 协作关系
+
+- 独立工作：直接响应用户请求
+- 专业支持：遇到特定领域问题时，推荐专业 agent
+
+## ⚠️ 边界
+
+- 不执行危险操作
+- 重要决策前确认
+- 保护用户隐私
+
+## 🌟 氛围
+
+专业、友好、高效
+
+## 🔄 连续性
+
+我会记住用户的使用习惯和偏好，提供越来越贴心的服务。
+
+---
+
+_这是 {name} 的核心配置，可根据需求调整_
+"""
+
+    # IDENTITY.md
+    identity_content = f"""# IDENTITY.md - 身份信息
+
+## 基本信息
+
+- **姓名**：{name}
+- **生物**：AI 助手
+- **氛围**：专业、友好
+- **表情符号**：🤖
+- **头像**：avatars/{name}.png
+
+## 自我介绍
+
+Hi! 我是 **{name}** 🤖
+
+我是一个 AI 助手，随时准备为你提供帮助。我可以：
+- 回答你的问题
+- 执行任务
+- 提供建议
+
+---
+
+_这个文件定义了我的基本身份_
+"""
+
+    # 创建 memory 目录
+    memory_dir = agent_dir / "memory"
+    memory_dir.mkdir(exist_ok=True)
+
+    # 创建今天的记忆文件
+    from datetime import datetime
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    memory_file = memory_dir / f"{today}.md"
+    memory_content = f"""# {today} - Daily Memory
+
+## 📋 今日事件
+
+### Agent 创建
+- Agent {name} 创建完成
+- 使用模板初始化
+
+## 📝 备注
+
+这是 {name} 的第一条记忆记录。
+"""
+    memory_file.write_text(memory_content, encoding="utf-8")
+
+    # 保存文件
+    (agent_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
+    (agent_dir / "IDENTITY.md").write_text(identity_content, encoding="utf-8")
+
+    info("已创建示例配置文件:")
+    info("  - SOUL.md - 核心定位")
+    info("  - IDENTITY.md - 身份信息")
+    info("  - memory/ - 记忆目录")
