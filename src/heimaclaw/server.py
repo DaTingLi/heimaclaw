@@ -215,7 +215,7 @@ async def health() -> dict[str, Any]:
 async def feishu_webhook(request: Request) -> Response:
     """
     飞书 Webhook 回调端点
-    
+
     接收飞书推送的消息事件，路由到对应 Agent 处理。
     """
     import json

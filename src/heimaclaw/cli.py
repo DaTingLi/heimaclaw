@@ -1089,3 +1089,23 @@ def monitoring_clear_old(
     deleted = tracker.clear_old_records(days)
 
     success(f"已清理 {deleted} 条旧记录（保留 {days} 天内数据）")
+
+
+# ==================== 长连接服务命令 ====================
+
+
+@app.command("start-ws")
+def start_ws_command() -> None:
+    """
+    启动飞书 WebSocket 长连接服务
+
+    无需配置 Webhook URL，使用飞书官方 SDK 建立长连接。
+    """
+    import asyncio
+
+    from heimaclaw.feishu_ws_server import main
+
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        info("服务已停止")
