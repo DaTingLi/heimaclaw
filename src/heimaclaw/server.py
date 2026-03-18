@@ -179,6 +179,7 @@ async def health() -> dict:
 
 # ==================== 飞书 Webhook ====================
 
+
 @app.post("/webhook/feishu")
 async def feishu_webhook(request: Request) -> Response:
     """
@@ -259,6 +260,7 @@ async def _get_last_session_id(runner: AgentRunner, user_id: str) -> str:
 
 # ==================== 企业微信 Webhook ====================
 
+
 @app.post("/webhook/wecom")
 async def wecom_webhook(request: Request) -> Response:
     """
@@ -328,16 +330,19 @@ async def wecom_webhook(request: Request) -> Response:
 
 # ==================== Agent 管理 API ====================
 
+
 @app.get("/api/agents")
 async def list_agents() -> dict:
     """列出所有 Agent"""
     agents = []
     for name, runner in _agents.items():
-        agents.append({
-            "name": name,
-            "status": runner.status.value,
-            "channel": runner.config.channel.value,
-        })
+        agents.append(
+            {
+                "name": name,
+                "status": runner.status.value,
+                "channel": runner.config.channel.value,
+            }
+        )
 
     return {
         "agents": agents,
@@ -366,6 +371,7 @@ async def get_agent(agent_name: str) -> dict:
 
 # ==================== 会话管理 API ====================
 
+
 @app.get("/api/sessions")
 async def list_sessions(agent_name: str = "") -> dict:
     """列出活跃会话"""
@@ -377,12 +383,14 @@ async def list_sessions(agent_name: str = "") -> dict:
 
         active = await manager.list_active()
         for session in active:
-            sessions.append({
-                "session_id": session.session_id,
-                "agent_id": session.agent_id,
-                "user_id": session.user_id,
-                "status": session.status.value,
-            })
+            sessions.append(
+                {
+                    "session_id": session.session_id,
+                    "agent_id": session.agent_id,
+                    "user_id": session.user_id,
+                    "status": session.status.value,
+                }
+            )
 
     return {
         "sessions": sessions,
