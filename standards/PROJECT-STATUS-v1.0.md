@@ -41,6 +41,18 @@
 - [ ] cgroup v2 限流
 - [ ] seccomp 过滤
 
+### Agent 运行时模块（接口完成度 80%）
+- [x] AgentRunner 运行器
+- [x] SessionManager 会话管理器
+- [x] ToolRegistry 工具注册表
+- [x] 会话创建/查询/更新/删除
+- [x] 消息存储/获取
+- [x] 工具注册/执行（装饰器模式）
+- [x] OpenAI 格式工具定义
+- [x] 消息处理循环框架
+- [ ] LLM 调用实现（OpenAI/Claude/GLM）
+- [ ] 沙箱中工具执行
+
 ### FastAPI 服务骨架（接口完成度 50%）
 - [x] 基础 FastAPI 应用
 - [x] 飞书 webhook 端点
@@ -62,35 +74,35 @@
 - [x] NO_COLOR 支持
 - [x] 表格/面板输出
 
-## 进行中模块
-
-### Agent 运行时模块（接口完成度 0%）
-- [ ] Agent 生命周期管理
-- [ ] 会话管理
-- [ ] 工具调用循环
-- [ ] 消息持久化
-
 ## 待启动模块
 
-### 渠道适配器模块
+### 渠道适配器模块（接口完成度 0%）
 - [ ] 飞书适配器实现
 - [ ] 企业微信适配器实现
 - [ ] 消息解析
 - [ ] 消息发送
 
+### LLM 集成模块（接口完成度 0%）
+- [ ] OpenAI 适配器
+- [ ] Claude 适配器
+- [ ] GLM 适配器
+- [ ] 多模型切换
+
 ## 当前活跃分支
 - master
 
 ## 下一步意图
-1. 实现 Agent 运行时模块（会话管理、工具调用循环）
-2. 完善渠道适配器（飞书/企微）
-3. 安装 Firecracker 实现完整 microVM 隔离
+1. 完善渠道适配器（飞书/企微消息收发）
+2. 实现 LLM 调用（OpenAI 优先）
+3. 安装 Firecracker 实现 microVM 完整隔离
 
 ## 关键指标
 - 已定义接口数：6
-- 已实现接口数：4（ConfigLoader、SandboxBackend、CLI 命令、WarmPool）
+- 已实现接口数：5（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner）
 - 阻塞项：0
+- 代码行数：约 4000+ 行
 
 ## 模块 SPEC 文档
 - [x] CLI 模块 SPEC
 - [x] 沙箱模块 SPEC
+- [x] Agent 运行时 SPEC
