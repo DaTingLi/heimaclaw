@@ -451,16 +451,94 @@ class FirecrackerBackend(SandboxBackend):
     ) -> ExecutionResult:
         """
         通过 vsock 执行命令
-        """
-        # TODO: 实现 vsock 通信
-        # 参考文档: https://man7.org/linux/man-pages/man7/vsock.7.html
 
-        return ExecutionResult(
-            exit_code=0,
-            stdout=f"[vsock] {command}",
-            stderr="",
-            duration_ms=10,
-        )
+        使用 Unix socket 连接到 microVM 的 vsock 端口。
+        """
+        import json
+        import socket
+        import time
+
+        start_time = time.time()
+
+        # 获取 vsock socket 路径
+        instance_dir = self.work_dir / instance_id
+        vsock_path = instance_dir / "vsock.sock"
+
+        if not vsock_path.exists():
+            # vsock 未就绪，使用降级模式
+            return await self._execute_fallback(command, timeout_ms)
+
+        try:
+            # 连接 vsock（通过 Unix socket）
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout_ms / 1000)
+            sock.connect(str(vsock_path))
+
+            # 构建请求
+            request = {
+                "type": "execute",
+                "command": command,
+                "timeout_ms": timeout_ms,
+            }
+
+            # 发送请求
+            data = json.dumps(request).encode("utf-8")
+            import struct
+
+            sock.sendall(struct.pack(">I", len(data)))
+            sock.sendall(data)
+
+            # 接收响应长度
+            length_data = b""
+            while len(length_data) < 4:
+                chunk = sock.recv(4 - len(length_data))
+                if not chunk:
+                    break
+                length_data += chunk
+
+            if len(length_data) < 4:
+                raise ConnectionError("vsock 响应不完整")
+
+            response_length = struct.unpack(">I", length_data)[0]
+
+            # 接收响应数据
+            response_data = b""
+            while len(response_data) < response_length:
+                chunk = sock.recv(response_length - len(response_data))
+                if not chunk:
+                    break
+                response_data += chunk
+
+            sock.close()
+
+            # 解析响应
+            response = json.loads(response_data.decode("utf-8"))
+
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            if response.get("success"):
+                return ExecutionResult(
+                    exit_code=response.get("exit_code", 0),
+                    stdout=response.get("stdout", ""),
+                    stderr=response.get("stderr", ""),
+                    duration_ms=duration_ms,
+                )
+            else:
+                return ExecutionResult(
+                    exit_code=1,
+                    stdout="",
+                    stderr=response.get("error", "执行失败"),
+                    duration_ms=duration_ms,
+                )
+
+        except Exception as e:
+            # vsock 通信失败，降级
+            return ExecutionResult(
+                exit_code=1,
+                stdout="",
+                stderr=f"vsock 通信失败: {e}",
+                duration_ms=int((time.time() - start_time) * 1000),
+            )
 
     async def get_instance(self, instance_id: str) -> Optional[InstanceInfo]:
         """获取实例信息"""
