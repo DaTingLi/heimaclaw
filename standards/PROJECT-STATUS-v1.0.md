@@ -177,3 +177,29 @@ heimaclaw start
 | Claude | `claude` | claude-3-sonnet | 原生 | 待测试 |
 | vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 待测试 |
 | Ollama | `ollama` | llama2 | OpenAI 兼容 | 待测试 |
+
+## 工具系统完成
+
+### CLI 工具命令
+```
+heimaclaw tool install <source>   # 安装工具
+heimaclaw tool uninstall <name>   # 卸载工具
+heimaclaw tool list               # 列出工具
+heimaclaw tool info <name>        # 查看详情
+heimaclaw tool enable <name>      # 启用工具
+heimaclaw tool disable <name>     # 禁用工具
+heimaclaw tool create <name>      # 创建模板
+```
+
+### 测试验证
+```
+✓ 工具安装成功（sysinfo）
+✓ 工具加载成功（2个函数）
+✓ get_system_info 执行成功
+✓ get_disk_usage 执行成功
+✓ OpenAI 格式导出成功
+```
+
+### 示例工具
+- sysinfo: 系统信息查询（get_system_info, get_disk_usage）
+- weather: 示例工具（weather_example）
