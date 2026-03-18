@@ -163,3 +163,27 @@ heimaclaw start
 | Claude | `claude` | claude-3-sonnet | 原生 | 待测试 |
 | vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 待测试 |
 | Ollama | `ollama` | llama2 | OpenAI 兼容 | 待测试 |
+
+## Firecracker 安装完成
+
+### 安装内容
+- Firecracker v1.15.0
+- Jailer v1.15.0
+- Linux kernel (v5.15.0)
+- Alpine rootfs (128MB)
+
+### 验证结果
+```
+✓ Firecracker 检测成功
+✓ KVM 硬件虚拟化可用
+✓ microVM 启动测试成功
+```
+
+### 镜像文件位置
+- kernel: /opt/heimaclaw/images/vmlinux
+- rootfs: /opt/heimaclaw/images/rootfs.ext4
+
+### 下一步
+- [ ] 更新 FirecrackerBackend 使用真实配置
+- [ ] 实现 vsock 通信
+- [ ] 创建快照功能
