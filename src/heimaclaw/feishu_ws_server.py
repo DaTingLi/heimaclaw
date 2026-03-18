@@ -120,7 +120,6 @@ async def handle_feishu_message(message: Any) -> None:
 
         # 发送回复
 
-
         # 获取飞书适配器并发送消息
         # TODO: 需要保存 adapter 引用
 
