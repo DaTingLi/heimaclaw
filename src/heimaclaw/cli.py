@@ -1109,3 +1109,119 @@ def start_ws_command() -> None:
         asyncio.run(main())
     except KeyboardInterrupt:
         info("服务已停止")
+
+
+# ==================== Agent 绑定命令 ====================
+
+bindings_app = typer.Typer(help="Agent 绑定管理")
+app.add_typer(bindings_app, name="bindings")
+
+
+@bindings_app.command("bind-user")
+def bind_user(
+    user_id: str = typer.Argument(..., help="用户 ID"),
+    agent: str = typer.Option("default", "--agent", "-a", help="Agent 名称"),
+) -> None:
+    """绑定用户到 Agent"""
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.bind_user(user_id, agent)
+
+    success(f"已绑定用户 {user_id} 到 Agent {agent}")
+
+
+@bindings_app.command("bind-group")
+def bind_group(
+    chat_id: str = typer.Argument(..., help="群聊 ID"),
+    agent: str = typer.Option("default", "--agent", "-a", help="Agent 名称"),
+) -> None:
+    """绑定群聊到 Agent"""
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.bind_group(chat_id, agent)
+
+    success(f"已绑定群聊 {chat_id} 到 Agent {agent}")
+
+
+@bindings_app.command("unbind-user")
+def unbind_user(user_id: str = typer.Argument(..., help="用户 ID")) -> None:
+    """解绑用户"""
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.unbind_user(user_id)
+
+    success(f"已解绑用户 {user_id}")
+
+
+@bindings_app.command("unbind-group")
+def unbind_group(chat_id: str = typer.Argument(..., help="群聊 ID")) -> None:
+    """解绑群聊"""
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.unbind_group(chat_id)
+
+    success(f"已解绑群聊 {chat_id}")
+
+
+@bindings_app.command("set-default")
+def set_default_agent(
+    agent: str = typer.Argument(..., help="Agent 名称"),
+) -> None:
+    """设置默认 Agent"""
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.set_default(agent)
+
+    success(f"已设置默认 Agent: {agent}")
+
+
+@bindings_app.command("list")
+def list_bindings() -> None:
+    """列出所有绑定"""
+    from rich.table import Table
+
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    bindings = router.get_bindings()
+
+    if not bindings:
+        info("暂无绑定")
+        return
+
+    table = Table(title="Agent 绑定列表")
+    table.add_column("类型")
+    table.add_column("ID")
+    table.add_column("Agent")
+
+    for key, agent in bindings.items():
+        if key == "default":
+            table.add_row("默认", "-", agent)
+        elif key.startswith("user:"):
+            table.add_row("用户", key[5:], agent)
+        elif key.startswith("group:"):
+            table.add_row("群聊", key[6:], agent)
+
+    console.print(table)
+
+
+@bindings_app.command("clear")
+def clear_bindings(
+    confirm: bool = typer.Option(False, "--yes", "-y", help="确认清空"),
+) -> None:
+    """清空所有绑定"""
+    if not confirm:
+        warning("使用 --yes 确认清空所有绑定")
+        return
+
+    from heimaclaw.agent.router import AgentRouter
+
+    router = AgentRouter()
+    router.clear_bindings()
+
+    success("已清空所有绑定")

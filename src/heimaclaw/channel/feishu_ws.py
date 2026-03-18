@@ -185,11 +185,24 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             # 回调处理
             if self._message_callback:
                 try:
-                    # 在事件循环中调用回调
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self._message_callback(inbound_msg))
-                    loop.close()
+                    # 使用线程安全的方式调用异步回调
+                    import asyncio
+
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # 如果事件循环正在运行，使用 call_soon_threadsafe
+                            future = asyncio.run_coroutine_threadsafe(
+                                self._message_callback(inbound_msg), loop
+                            )
+                            # 等待完成（超时5秒）
+                            future.result(timeout=5)
+                        else:
+                            # 如果事件循环未运行，直接运行
+                            loop.run_until_complete(self._message_callback(inbound_msg))
+                    except RuntimeError:
+                        # 没有事件循环，创建新的
+                        asyncio.run(self._message_callback(inbound_msg))
                 except Exception as e:
                     error(f"消息回调失败: {e}")
 
@@ -328,3 +341,50 @@ class FeishuWebSocketAdapter(ChannelAdapter):
         ]
         for msg_id in expired:
             del self._processed_messages[msg_id]
+
+    async def send_message_to_user(
+        self,
+        user_id: str,
+        content: str,
+    ) -> bool:
+        """
+        发送消息给用户
+
+        参数:
+            user_id: 用户 ID (open_id)
+            content: 消息内容
+
+        返回:
+            是否发送成功
+        """
+        try:
+            from lark_oapi.api.im.v1 import (
+                CreateMessageRequest,
+                CreateMessageRequestBody,
+            )
+
+            request = (
+                CreateMessageRequest.builder()
+                .receive_id_type("open_id")
+                .request_body(
+                    CreateMessageRequestBody.builder()
+                    .receive_id(user_id)
+                    .msg_type("text")
+                    .content(json.dumps({"text": content}))
+                    .build()
+                )
+                .build()
+            )
+
+            response = self.client.im.v1.message.create(request)
+
+            if response.success():
+                info(f"消息发送成功: {user_id}")
+                return True
+            else:
+                error(f"消息发送失败: code={response.code}, msg={response.msg}")
+                return False
+
+        except Exception as e:
+            error(f"发送消息异常: {e}")
+            return False
