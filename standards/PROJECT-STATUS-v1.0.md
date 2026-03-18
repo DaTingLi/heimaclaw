@@ -210,15 +210,13 @@ FastAPI 服务  █████████░░░  90%
 
 ## 关键指标
 
-- **代码行数**: 12,800+ (新增800行)
-- **提交次数**: 21 次 (新增2次)
+- **代码行数**: 14,400+ (新增2408行)
+- **提交次数**: 22 次 (新增3次)
 - **CI/CD**: 全部通过 ✅
 - **核心功能**: 100% 完成
-- **测试覆盖**: 智谱 GLM + Markdown解析已验证
+- **测试覆盖**: 智谱 GLM + Markdown解析 + 记忆系统已验证
 
 ---
-
-## 仓库信息
 
 - **地址**: https://github.com/DaTingLi/heimaclaw
 - **最新提交**: d4b1f92
@@ -245,58 +243,35 @@ FastAPI 服务  █████████░░░  90%
 - **06:37** - Git 提交：9576c58 (feat: Markdown配置支持)
 - **06:37** - Git 提交：d4b1f92 (ci: GitHub Actions)
 - **07:00** - 进度记录（错误位置，已修正）
+- **07:10** - Git 提交：954fc3d (docs: 进度记录修正)
 - **07:10** - 开始 Phase 2: 记忆系统
+- **07:10** - 开始 Phase 2.1: 记忆管理器
+- **07:20** - 完成 Phase 2.1（耗时10分钟）
+- **07:20** - Git 提交：4e89ca0 (feat: Phase 2.1 记忆管理器)
+- **07:25** - 开始 Phase 2.2: MemoryManager 集成
 
 ---
 
-_严格遵循工程规范：测试 → 提交 → CI/CD → 进度记录 → 下一阶段_ ✨
+### 开始时间
+- **开始**: 2026-03-19 07:25
 
-### Phase 2.1: 记忆管理器（✅ 已完成 2026-03-19 07:20）
+### 目标
+- 统一的记忆管理接口
+- Agent 集成
+- 上下文自动组装
+- 完整流程测试
 
-#### 完成时间
-- **开始**: 2026-03-19 07:10
-- **完成**: 2026-03-19 07:20
-- **耗时**: 约10分钟
+### 计划
+- [ ] MemoryManager 统一接口
+- [ ] Agent 集成
+- [ ] 集成测试
+- [ ] Git 提交
 
-#### 核心模块（1208行）
-- [x] **SessionMemory** (`src/heimaclaw/memory/session.py`, 325行)
-  - 会话消息存储
-  - 最大消息数限制（1000条）
-  - 7天自动过期
-  - 持久化到磁盘
-
-- [x] **DailyMemory** (`src/heimaclaw/memory/daily.py`, 215行)
-  - 每日事件总结
-  - 30天保留
-  - Markdown 格式存储
-  - 事件搜索功能
-
-- [x] **LongTermMemory** (`src/heimaclaw/memory/longterm.py`, 329行)
-  - 重要事件永久保存
-  - 用户画像管理
-  - 100KB 自动压缩
-  - 关键词搜索
-
-- [x] **ContextBudget** (`src/heimaclaw/memory/budget.py`, 349行)
-  - 128K Token 预算分配
-  - 智能上下文裁剪
-  - 使用统计报告
-  - 多层次压缩策略
-
-#### 测试（~400行）
-- [x] `tests/memory/test_session.py` (11个测试用例)
-- [x] `tests/memory/test_daily.py` (8个测试用例)
-- [x] `tests/memory/test_longterm.py` (7个测试用例)
-
-#### 代码统计
-```
-总计：约1608行
-- SessionMemory：325行
-- DailyMemory：215行
-- LongTermMemory：329行
-- ContextBudget：349行
-- 测试代码：400行
-```
+### 进度
+- [ ] 核心模块开发
+- [ ] 单元测试
+- [ ] Git 提交
 
 ---
 
+_严格遵循工程规范：开发→测试→提交→进度记录→下一阶段_ ✨

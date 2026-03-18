@@ -5,7 +5,7 @@ Token 预算管理模块
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 
 def count_tokens(text: str) -> int:
