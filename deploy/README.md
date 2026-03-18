@@ -231,3 +231,99 @@ server {
     }
 }
 ```
+
+## 14. vsock 服务端集成
+
+### 更新 rootfs
+
+```bash
+# 方式1: 使用更新脚本（在项目目录执行）
+cd /root/dt/ai_coding/heimaclaw
+./scripts/update-rootfs.sh
+
+# 方式2: 从头构建
+./scripts/build-rootfs.sh /opt/heimaclaw/images/rootfs.ext4 256
+```
+
+### rootfs 目录结构
+
+```
+/opt/heimaclaw/images/
+├── vmlinux           # Linux kernel
+└── rootfs.ext4       # Alpine rootfs + vsock 服务端
+    /opt/heimaclaw/
+    ├── lib/python/heimaclaw/  # Python 模块
+    │   ├── __init__.py
+    │   ├── console.py
+    │   └── sandbox/vsock/
+    │       ├── __init__.py
+    │       ├── client.py
+    │       ├── server.py
+    │       └── manager.py
+    └── bin/
+        └── vsock-server        # vsock 服务端启动脚本
+
+/init                # microVM 启动脚本
+```
+
+### vsock 通信流程
+
+```
+1. Firecracker 启动 microVM
+2. init 脚本自动启动 vsock-server
+3. vsock-server 监听 CID:1234
+4. 宿主机通过 vsock.sock 连接
+5. 发送命令执行请求
+6. 接收执行结果
+```
+
+### 测试 vsock 通信
+
+```python
+# 在宿主机执行
+from heimaclaw.sandbox.vsock import VsockClient
+
+# CID 从 instance info 获取
+client = VsockClient(cid=10000, port=1234)
+client.connect()
+
+# 测试命令执行
+result = client.send_command("execute", {
+    "command": "uname -a"
+})
+print(result)
+
+client.disconnect()
+```
+
+### vsock 服务端命令
+
+microVM 内的 vsock 服务端支持以下命令类型：
+
+| 类型 | 功能 | 示例 |
+|------|------|------|
+| execute | 执行 shell 命令 | `{"type":"execute","command":"ls"}` |
+| health_check | 健康检查 | `{"type":"health_check"}` |
+| get_info | 查询系统信息 | `{"type":"get_info"}` |
+
+### 故障排查
+
+```bash
+# 检查 vsock 内核模块
+lsmod | grep vsock
+
+# 检查 /dev/vhost-vsock
+ls -la /dev/vhost-vsock
+
+# 查看 microVM 日志
+cat /opt/heimaclaw/sandboxes/<instance_id>/stdout.log
+
+# 测试 vsock 连接
+python3 -c "
+from heimaclaw.sandbox.vsock import VsockClient
+c = VsockClient(10000, 1234)
+c.connect()
+print(c.send_command('health_check'))
+c.disconnect()
+"
+```
