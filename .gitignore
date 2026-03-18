@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Data
+data/
+sandboxes/
+
+# Build
+*.whl
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+data/
+logs/
+sandboxes/
+standards_backup/

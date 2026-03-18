@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "heimaclaw"
+version = "0.1.0"
+description = "HeiMaClaw - 生产级企业 AI Agent 平台"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "HeiMaClaw Team", email = "heimaclaw@example.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "tomli>=2.0.0;python_version<'3.11'",
+    "tomli-w>=1.0.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "httpx>=0.26.0",
+    "aiofiles>=23.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "black>=24.0.0",
+]
+firecracker = [
+    "requests>=2.28.0",
+]
+
+[project.scripts]
+heimaclaw = "heimaclaw.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/DaTingLi/heimaclaw"
+Repository = "https://github.com/DaTingLi/heimaclaw"
+Documentation = "https://github.com/DaTingLi/heimaclaw#readme"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/heimaclaw"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
