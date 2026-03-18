@@ -16,6 +16,7 @@ from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.console import agent_event, error, info
+from heimaclaw.config.loader import get_config
 from heimaclaw.interfaces import AgentConfig, ChannelType
 from heimaclaw.server_monitoring import router as monitoring_router
 
@@ -110,7 +111,8 @@ async def stop_agents() -> None:
 def init_channel_adapters() -> None:
     """初始化渠道适配器"""
     # 从配置加载飞书适配器
-    feishu_adapter = FeishuAdapter()
+    feishu_config = get_config().get("channels", {}).get("feishu", {})
+    feishu_adapter = FeishuAdapter(feishu_config)
     if feishu_adapter.is_configured:
         _channel_adapters["feishu"] = feishu_adapter
         info("飞书适配器已配置")
