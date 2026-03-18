@@ -25,7 +25,7 @@ class FeishuAdapter(ChannelAdapter):
     channel_type = ChannelType.FEISHU
     base_url = "https://open.feishu.cn/open-apis"
 
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
         """
         初始化飞书适配器
 
@@ -35,6 +35,7 @@ class FeishuAdapter(ChannelAdapter):
                 - app_secret: 应用密钥
                 - encrypt_key: 加密密钥（可选）
         """
+        config = config or {}
         self.app_id = config.get("app_id", "")
         self.app_secret = config.get("app_secret", "")
         self.encrypt_key = config.get("encrypt_key", "")
@@ -180,10 +181,6 @@ class FeishuAdapter(ChannelAdapter):
             error(f"发送飞书消息失败: {e}")
             return False
 
-    async def close(self) -> None:
-        """关闭连接"""
-        await self._client.aclose()
-
     def is_configured(self) -> bool:
         """是否已配置"""
         return bool(self.app_id and self.app_secret)
@@ -307,3 +304,7 @@ class FeishuAdapter(ChannelAdapter):
         except Exception as e:
             error(f"获取飞书会话信息失败: {e}")
             return {}
+
+    async def close(self) -> None:
+        """关闭连接"""
+        await self._client.aclose()
