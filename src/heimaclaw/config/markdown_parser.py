@@ -251,10 +251,24 @@ class MarkdownParser:
 
     def _extract_section(self, content: str, section_name: str) -> str:
         """提取章节内容"""
-        # 匹配 ## 章节名 或 # 章节名
-        pattern = rf"#+\s*{section_name}.*?\n(.*?)(?=\n#+|\Z)"
-        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-        return match.group(1).strip() if match else ""
+        import re
+        lines = content.split('\n')
+        in_section = False
+        section_lines = []
+        
+        for line in lines:
+            # 检查是否是章节标题
+            if re.match(r'^#+\s*' + re.escape(section_name), line, re.IGNORECASE):
+                in_section = True
+                continue
+            
+            if in_section:
+                # 遇到下一个章节标题，停止
+                if re.match(r'^#+\s+', line):
+                    break
+                section_lines.append(line)
+        
+        return '\n'.join(section_lines).strip()
 
     def _extract_field(self, content: str, field_name: str) -> str:
         """提取字段值"""

@@ -127,11 +127,6 @@ class ConfigCompiler:
         if user_config:
             config["user"] = user_config.to_dict()
 
-        # 解析 MEMORY.md
-        memory_config = parser.parse_memory()
-        if memory_config:
-            config["memory"] = memory_config.to_dict()
-
         return config
 
     def _load_base_config(self, agent_dir: Path) -> Optional[dict[str, Any]]:
