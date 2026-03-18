@@ -4,9 +4,6 @@
 实现飞书（Lark）的消息接收和发送。
 """
 
-import base64
-import hashlib
-import hmac
 import json
 import time
 from typing import Any, Optional
@@ -14,7 +11,7 @@ from typing import Any, Optional
 from httpx import AsyncClient
 
 from heimaclaw.channel.base import ChannelAdapter, InboundMessage, OutboundMessage
-from heimaclaw.console import error, agent_event, info
+from heimaclaw.console import agent_event, error, info
 from heimaclaw.interfaces import ChannelType
 
 
