@@ -220,15 +220,17 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             是否发送成功
         """
         try:
+            # 判断是群聊还是私聊
+            chat_id = message.chat_id
+            is_group = chat_id.startswith("oc_")
+
             # 创建消息请求
             request = (
                 CreateMessageRequest.builder()
-                .receive_id_type(
-                    "open_id" if message.user_id.startswith("ou_") else "chat_id"
-                )
+                .receive_id_type("chat_id" if is_group else "open_id")
                 .request_body(
                     CreateMessageRequestBody.builder()
-                    .receive_id(message.user_id)
+                    .receive_id(chat_id)
                     .msg_type("text")
                     .content(json.dumps({"text": message.content}))
                     .build()
@@ -240,7 +242,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             response = self.client.im.v1.message.create(request)
 
             if response.success():
-                info(f"飞书消息发送成功: {message.user_id}")
+                info("飞书消息发送成功")
                 return True
             else:
                 error(f"飞书消息发送失败: code={response.code}, msg={response.msg}")
@@ -283,6 +285,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             response = self.client.contact.v3.user.get(request)
 
             if response.success():
+                info("飞书消息发送成功")
                 return response.data.user
             else:
                 return {}
@@ -301,6 +304,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             response = self.client.im.v1.chat.get(request)
 
             if response.success():
+                info("飞书消息发送成功")
                 return response.data
             else:
                 return {}
@@ -379,6 +383,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             response = self.client.im.v1.message.create(request)
 
             if response.success():
+                info("飞书消息发送成功")
                 info(f"消息发送成功: {user_id}")
                 return True
             else:

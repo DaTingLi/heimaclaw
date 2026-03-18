@@ -139,8 +139,10 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         # 发送回复
         from heimaclaw.channel.base import OutboundMessage
 
+        # 群聊：发送到群（chat_id）
+        # 私聊：发送给用户（chat_id = user_id）
         outbound = OutboundMessage(
-            user_id=user_id if not is_group else chat_id,
+            chat_id=chat_id if is_group else user_id,
             content=response_text,
         )
 

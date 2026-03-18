@@ -1225,3 +1225,78 @@ def clear_bindings(
     router.clear_bindings()
 
     success("已清空所有绑定")
+
+
+# ==================== 会话管理命令 ====================
+
+
+@app.command("session")
+def session_command() -> None:
+    """会话管理命令组"""
+    info("使用以下子命令：")
+    info("  heimaclaw session list          - 列出所有会话")
+    info("  heimaclaw session clear <id>    - 清除指定会话")
+    info("  heimaclaw session clear-all     - 清除所有会话")
+
+
+@app.command("session-list")
+def session_list() -> None:
+    """列出所有会话"""
+    from pathlib import Path
+
+    from rich.table import Table
+
+    sessions_dir = Path("/tmp/heimaclaw/sessions")
+
+    if not sessions_dir.exists():
+        info("暂无会话记录")
+        return
+
+    table = Table(title="会话列表")
+    table.add_column("Agent")
+    table.add_column("会话文件")
+
+    for agent_dir in sessions_dir.iterdir():
+        if agent_dir.is_dir():
+            for session_file in agent_dir.glob("*.json"):
+                table.add_row(agent_dir.name, session_file.name)
+
+    console.print(table)
+
+
+@app.command("session-clear")
+def session_clear(
+    agent: str = typer.Option(..., "--agent", "-a", help="Agent 名称"),
+) -> None:
+    """清除指定 Agent 的所有会话"""
+    import shutil
+    from pathlib import Path
+
+    sessions_dir = Path(f"/tmp/heimaclaw/sessions/{agent}")
+
+    if sessions_dir.exists():
+        shutil.rmtree(sessions_dir)
+        success(f"已清除 Agent {agent} 的所有会话")
+    else:
+        info(f"Agent {agent} 暂无会话记录")
+
+
+@app.command("session-clear-all")
+def session_clear_all(
+    confirm: bool = typer.Option(False, "--yes", "-y", help="确认清除"),
+) -> None:
+    """清除所有会话"""
+    import shutil
+    from pathlib import Path
+
+    if not confirm:
+        warning("使用 --yes 确认清除所有会话")
+        return
+
+    sessions_dir = Path("/tmp/heimaclaw/sessions")
+
+    if sessions_dir.exists():
+        shutil.rmtree(sessions_dir)
+        success("已清除所有会话")
+    else:
+        info("暂无会话记录")
