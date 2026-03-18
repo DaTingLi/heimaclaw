@@ -53,6 +53,16 @@
 - [ ] LLM 调用实现（OpenAI/Claude/GLM）
 - [ ] 沙箱中工具执行
 
+### 渠道适配器模块（接口完成度 60%）
+- [x] ChannelAdapter 抽象基类
+- [x] FeishuAdapter 飞书适配器
+- [x] WeComAdapter 企业微信适配器
+- [x] 消息解析框架
+- [x] Token 缓存管理
+- [ ] 完整的消息发送测试
+- [ ] 卡片消息完整实现
+- [ ] 企业微信消息解密
+
 ### FastAPI 服务骨架（接口完成度 50%）
 - [x] 基础 FastAPI 应用
 - [x] 飞书 webhook 端点
@@ -76,12 +86,6 @@
 
 ## 待启动模块
 
-### 渠道适配器模块（接口完成度 0%）
-- [ ] 飞书适配器实现
-- [ ] 企业微信适配器实现
-- [ ] 消息解析
-- [ ] 消息发送
-
 ### LLM 集成模块（接口完成度 0%）
 - [ ] OpenAI 适配器
 - [ ] Claude 适配器
@@ -92,17 +96,18 @@
 - master
 
 ## 下一步意图
-1. 完善渠道适配器（飞书/企微消息收发）
-2. 实现 LLM 调用（OpenAI 优先）
+1. 完善 LLM 调用实现（OpenAI 优先）
+2. 完善渠道适配器消息发送
 3. 安装 Firecracker 实现 microVM 完整隔离
 
 ## 关键指标
 - 已定义接口数：6
-- 已实现接口数：5（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner）
+- 已实现接口数：6（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner、ChannelAdapter）
 - 阻塞项：0
-- 代码行数：约 4000+ 行
+- 代码行数：约 5500+ 行
 
 ## 模块 SPEC 文档
 - [x] CLI 模块 SPEC
 - [x] 沙箱模块 SPEC
 - [x] Agent 运行时 SPEC
+- [x] 渠道适配器 SPEC
