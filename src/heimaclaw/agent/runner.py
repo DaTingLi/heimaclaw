@@ -15,13 +15,17 @@ from heimaclaw.interfaces import (
     AgentConfig,
     AgentStatus,
     ChannelType,
-    Message,
+    Message as InterfaceMessage,
 )
 from heimaclaw.agent.session import Session, SessionManager
 from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
 from heimaclaw.sandbox.base import SandboxBackend
 from heimaclaw.sandbox.firecracker import FirecrackerBackend
 from heimaclaw.sandbox.pool import WarmPool
+
+# LLM 相关导入
+from heimaclaw.llm.base import Message as LLMMessage, LLMProvider
+from heimaclaw.llm.registry import get_llm_registry
 
 
 class AgentRunner:
@@ -39,6 +43,7 @@ class AgentRunner:
         tool_registry: Optional[ToolRegistry] = None,
         sandbox_backend: Optional[SandboxBackend] = None,
         warm_pool: Optional[WarmPool] = None,
+        llm_config: Optional[dict[str, Any]] = None,
     ):
         """
         初始化 Agent 运行器
@@ -50,6 +55,7 @@ class AgentRunner:
             tool_registry: 工具注册表
             sandbox_backend: 沙箱后端
             warm_pool: 预热池
+            llm_config: LLM 配置（包含 api_key 等）
         """
         self.agent_id = agent_id
         self.config = config
@@ -63,10 +69,9 @@ class AgentRunner:
         self._sandbox_instance_id: Optional[str] = None
         self._active_sessions: dict[str, Session] = {}
         
-        # LLM 客户端配置
-        self._model_provider = config.model_provider
-        self._model_name = config.model_name
-        self._api_key: Optional[str] = None
+        # LLM 配置
+        self._llm_config = llm_config or {}
+        self._llm_adapter_name: Optional[str] = None
     
     @property
     def status(self) -> AgentStatus:
@@ -77,7 +82,7 @@ class AgentRunner:
         """
         启动 Agent
         
-        初始化沙箱实例，准备接收消息。
+        初始化沙箱实例和 LLM，准备接收消息。
         """
         if self._status == AgentStatus.RUNNING:
             return
@@ -89,6 +94,9 @@ class AgentRunner:
             # 初始化沙箱
             if self.config.sandbox_enabled:
                 await self._initialize_sandbox()
+            
+            # 初始化 LLM
+            await self._initialize_llm()
             
             self._status = AgentStatus.RUNNING
             agent_event(f"Agent 已启动: {self.agent_id}")
@@ -213,6 +221,39 @@ class AgentRunner:
         
         info(f"沙箱实例已创建: {self._sandbox_instance_id}")
     
+    async def _initialize_llm(self) -> None:
+        """初始化 LLM 适配器"""
+        if not self._llm_config:
+            warning("未配置 LLM，将使用模拟响应")
+            return
+        
+        from heimaclaw.llm import LLMConfig
+        
+        # 解析 provider
+        provider_str = self._llm_config.get("provider", "openai")
+        try:
+            provider = LLMProvider(provider_str)
+        except ValueError:
+            provider = LLMProvider.OPENAI
+        
+        # 创建 LLM 配置
+        llm_config = LLMConfig(
+            provider=provider,
+            model_name=self._llm_config.get("model_name", "gpt-4"),
+            api_key=self._llm_config.get("api_key"),
+            base_url=self._llm_config.get("base_url"),
+            temperature=self._llm_config.get("temperature", 0.7),
+            max_tokens=self._llm_config.get("max_tokens", 4096),
+        )
+        
+        # 注册到全局注册表
+        registry = get_llm_registry()
+        adapter_name = f"{self.agent_id}-llm"
+        registry.register(adapter_name, llm_config)
+        self._llm_adapter_name = adapter_name
+        
+        info(f"LLM 已配置: {provider.value}/{llm_config.model_name}")
+    
     async def _execute_loop(self, session: Session) -> str:
         """
         执行处理循环
@@ -235,13 +276,13 @@ class AgentRunner:
         response = await self._call_llm(history)
         
         # 检查是否需要工具调用
-        tool_calls = self._extract_tool_calls(response)
+        tool_calls = response.get("tool_calls", [])
         
         if tool_calls:
             # 执行工具调用
             for tool_call in tool_calls:
-                tool_name = tool_call.get("name")
-                tool_params = tool_call.get("parameters", {})
+                tool_name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+                tool_params = tool_call.get("parameters") or tool_call.get("function", {}).get("arguments", {})
                 
                 # 记录工具调用消息
                 await self.session_manager.add_message(
@@ -249,11 +290,11 @@ class AgentRunner:
                     role="assistant",
                     content="",
                     tool_name=tool_name,
-                    tool_call_id=tool_call.get("id"),
+                    tool_call_id=tool_call.get("id", ""),
                 )
                 
-                # 在沙箱中执行工具
-                tool_result = await self._execute_tool_in_sandbox(
+                # 执行工具
+                tool_result = await self._execute_tool(
                     tool_name=tool_name,
                     parameters=tool_params,
                 )
@@ -264,16 +305,16 @@ class AgentRunner:
                     role="tool",
                     content=json.dumps(tool_result.result if tool_result.success else tool_result.error),
                     tool_name=tool_name,
-                    tool_call_id=tool_call.get("id"),
+                    tool_call_id=tool_call.get("id", ""),
                 )
             
             # 递归调用获取最终响应
             return await self._execute_loop(session)
         
         # 返回最终响应
-        return self._extract_content(response)
+        return response.get("content", "")
     
-    async def _call_llm(self, messages: list[dict[str, Any]]) -> Any:
+    async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """
         调用 LLM
         
@@ -281,16 +322,42 @@ class AgentRunner:
             messages: 消息历史
             
         返回:
-            LLM 响应
+            LLM 响应字典
         """
-        # TODO: 实现真实的 LLM 调用
-        # 支持 OpenAI、Claude、GLM 等
+        if not self._llm_adapter_name:
+            # 模拟响应
+            return {
+                "content": "这是一个模拟的响应。请配置 API Key 以使用真实 LLM。",
+                "tool_calls": None,
+            }
         
-        # 模拟响应
-        return {
-            "content": "这是一个模拟的响应。请配置 API Key 以使用真实 LLM。",
-            "tool_calls": None,
-        }
+        try:
+            # 转换消息格式
+            llm_messages = []
+            for msg in messages:
+                llm_msg = LLMMessage(role=msg["role"], content=msg.get("content"))
+                llm_messages.append(llm_msg)
+            
+            # 调用 LLM
+            registry = get_llm_registry()
+            response = await registry.chat(llm_messages, adapter_name=self._llm_adapter_name)
+            
+            # 转换响应
+            result = {
+                "content": response.content,
+                "tool_calls": [tc.to_dict() for tc in response.tool_calls] if response.tool_calls else None,
+            }
+            
+            info(f"LLM 响应: {response.total_tokens} tokens, {response.latency_ms}ms")
+            
+            return result
+            
+        except Exception as e:
+            error(f"LLM 调用失败: {e}")
+            return {
+                "content": f"LLM 调用失败: {e}",
+                "tool_calls": None,
+            }
     
     def _build_message_history(
         self,
@@ -338,34 +405,6 @@ class AgentRunner:
         
         return history
     
-    def _extract_tool_calls(self, response: Any) -> list[dict[str, Any]]:
-        """
-        从响应中提取工具调用
-        
-        参数:
-            response: LLM 响应
-            
-        返回:
-            工具调用列表
-        """
-        if isinstance(response, dict):
-            return response.get("tool_calls") or []
-        return []
-    
-    def _extract_content(self, response: Any) -> str:
-        """
-        从响应中提取内容
-        
-        参数:
-            response: LLM 响应
-            
-        返回:
-            文本内容
-        """
-        if isinstance(response, dict):
-            return response.get("content", "")
-        return str(response)
-    
     async def _execute_tool_in_sandbox(
         self,
         tool_name: str,
@@ -412,4 +451,5 @@ class AgentRunner:
         参数:
             api_key: API Key
         """
-        self._api_key = api_key
+        if self._llm_config:
+            self._llm_config["api_key"] = api_key
