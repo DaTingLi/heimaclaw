@@ -173,10 +173,13 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             # 创建消息对象
             inbound_msg = InboundMessage(
                 message_id=message_id,
+                chat_id=msg.chat_id or "",
                 user_id=user_id,
+                user_name=sender.sender_id.user_id if sender.sender_id else "",
                 content=content_text,
-                timestamp=int(time.time()),
-                raw_message=data,
+                message_type="text",
+                timestamp=time.time(),
+                raw_data={"event": data.event},
             )
 
             # 回调处理
