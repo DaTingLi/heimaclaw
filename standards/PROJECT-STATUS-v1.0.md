@@ -237,3 +237,32 @@ heimaclaw monitoring clear-old    - 清理旧记录
 ### 部署文档
 - deploy/README.md（完整部署指南）
 - deploy/heimaclaw.service（systemd 配置）
+
+## vsock 通信完成
+
+### vsock 模块
+- [x] VsockClient（宿主机端）
+- [x] VsockServer（microVM 端）
+- [x] VsockManager（CID 分配）
+- [x] VsockCommand（命令构建器）
+
+### 功能
+- 命令执行（execute）
+- 工具调用（call_tool）
+- 健康检查（health_check）
+- 信息查询（get_info）
+
+### 通信协议
+- Unix socket 连接（vsock.sock）
+- 长度前缀（4 字节大端）
+- JSON 序列化
+
+### Firecracker 集成
+- 自动配置 vsock 设备
+- guest_cid 基于端口分配
+- uds_path 用于宿主机连接
+
+### 待完成
+- [ ] vsock 服务端打包到 rootfs
+- [ ] 服务端自动启动
+- [ ] 性能测试
