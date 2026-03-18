@@ -5,15 +5,20 @@ HeiMaClaw FastAPI 服务模块
 并路由到对应的 Agent 进行处理。
 """
 
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator
+
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from heimaclaw.agent.runner import AgentRunner
 from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.config.loader import get_config
-from heimaclaw.console import error, info
+from heimaclaw.console import agent_event, error, info
 from heimaclaw.interfaces import AgentConfig, ChannelType
+from heimaclaw.server_monitoring import router as monitoring_router
 
 # 全局状态
 _agents: dict[str, AgentRunner] = {}
@@ -142,6 +147,289 @@ def init_channel_adapters() -> None:
             info("企业微信适配器已配置")
     except Exception as e:
         error(f"加载企业微信适配器失败: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """
+    应用生命周期管理
+
+    启动时初始化资源，关闭时清理资源。
+    """
+    info("HeiMaClaw 服务启动中...")
+
+    # 初始化渠道适配器
+    init_channel_adapters()
+
+    # 加载 Agent
+    await load_agents()
+
+    # 启动 Agent
+    await start_agents()
+
+    info(f"HeiMaClaw 服务已就绪 ({len(_agents)} Agent)")
+
+    yield
+
+    info("HeiMaClaw 服务关闭中...")
+
+    # 停止 Agent
+    await stop_agents()
+
+    info("HeiMaClaw 服务已停止")
+
+
+# 创建 FastAPI 应用
+app = FastAPI(
+    title="HeiMaClaw",
+    description="生产级企业 AI Agent 平台",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# 注册监控路由
+app.include_router(monitoring_router)
+
+
+@app.get("/")
+async def root() -> dict[str, Any]:
+    """健康检查端点"""
+    return {
+        "name": "HeiMaClaw",
+        "version": "0.1.0",
+        "status": "running",
+        "agents": len(_agents),
+    }
+
+
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    """健康检查端点"""
+    return {"status": "healthy"}
+
+
+# ==================== 飞书 Webhook ====================
+
+
+@app.post("/webhook/feishu")
+async def feishu_webhook(request: Request) -> Response:
+    """
+    飞书 Webhook 回调端点
+
+    接收飞书推送的消息事件，路由到对应 Agent 处理。
+    """
+    # 获取适配器
+    adapter = _channel_adapters.get("feishu")
+
+    if not adapter:
+        return JSONResponse(
+            {"error": "飞书未配置"},
+            status_code=503,
+        )
+
+    # 验证请求
+    if not await adapter.verify_webhook(request):
+        return JSONResponse(
+            {"error": "验证失败"},
+            status_code=401,
+        )
+
+    # 解析消息
+    try:
+        inbound_msg = await adapter.parse_message(request)
+    except Exception as e:
+        error(f"解析飞书消息失败: {e}")
+        return Response(status_code=400)
+
+    # URL 验证
+    if inbound_msg.message_type == "url_verification":
+        return JSONResponse({"challenge": inbound_msg.content})
+
+    # 查找对应的 Agent
+    agent_name = "default"  # TODO: 根据消息路由到不同 Agent
+    runner = _agents.get(agent_name)
+
+    if not runner:
+        agent_event(f"未找到 Agent: {agent_name}")
+        return Response(status_code=200)  # 返回 200 避免重试
+
+    # 处理消息
+    try:
+        response = await runner.process_message(
+            user_id=inbound_msg.user_id,
+            channel=ChannelType.FEISHU,
+            content=inbound_msg.content,
+        )
+
+        # 发送响应
+
+        sessions = await runner.session_manager.list_active()
+        user_sessions = [s for s in sessions if s.user_id == inbound_msg.user_id]
+
+        if user_sessions:
+            session = user_sessions[-1]
+            await adapter.send_message(
+                session.to_context(),
+                response,
+            )
+
+        return Response(status_code=200)
+
+    except Exception as e:
+        error(f"处理飞书消息失败: {e}")
+        return Response(status_code=500)
+
+
+async def _get_last_session_id(runner: AgentRunner, user_id: str) -> str:
+    """获取用户最近的会话 ID"""
+    sessions = await runner.session_manager.list_active()
+    for session in sessions:
+        if session.user_id == user_id:
+            return session.session_id
+    return ""
+
+
+# ==================== 企业微信 Webhook ====================
+
+
+@app.post("/webhook/wecom")
+async def wecom_webhook(request: Request) -> Response:
+    """
+    企业微信 Webhook 回调端点
+
+    接收企业微信推送的消息事件。
+    """
+    adapter = _channel_adapters.get("wecom")
+
+    if not adapter:
+        return JSONResponse(
+            {"error": "企业微信未配置"},
+            status_code=503,
+        )
+
+    # 验证请求
+    if not await adapter.verify_webhook(request):
+        return JSONResponse(
+            {"error": "验证失败"},
+            status_code=401,
+        )
+
+    # 解析消息
+    try:
+        inbound_msg = await adapter.parse_message(request)
+    except Exception as e:
+        error(f"解析企业微信消息失败: {e}")
+        return Response(status_code=400)
+
+    # URL 验证
+    if inbound_msg.message_type == "url_verification":
+        return Response(content=inbound_msg.content, media_type="text/plain")
+
+    # 查找对应的 Agent
+    agent_name = "default"
+    runner = _agents.get(agent_name)
+
+    if not runner:
+        return Response(status_code=200)
+
+    # 处理消息
+    try:
+        response = await runner.process_message(
+            user_id=inbound_msg.user_id,
+            channel=ChannelType.WECOM,
+            content=inbound_msg.content,
+        )
+
+        # 发送响应
+
+        sessions = await runner.session_manager.list_active()
+        user_sessions = [s for s in sessions if s.user_id == inbound_msg.user_id]
+
+        if user_sessions:
+            session = user_sessions[-1]
+            await adapter.send_message(
+                session.to_context(),
+                response,
+            )
+
+        return Response(status_code=200)
+
+    except Exception as e:
+        error(f"处理企业微信消息失败: {e}")
+        return Response(status_code=500)
+
+
+# ==================== Agent 管理 API ====================
+
+
+@app.get("/api/agents")
+async def list_agents() -> dict[str, Any]:
+    """列出所有 Agent"""
+    agents = []
+    for name, runner in _agents.items():
+        agents.append(
+            {
+                "name": name,
+                "status": runner.status.value,
+                "channel": runner.config.channel.value,
+            }
+        )
+
+    return {
+        "agents": agents,
+        "total": len(agents),
+    }
+
+
+@app.get("/api/agents/{agent_name}")
+async def get_agent(agent_name: str) -> dict[str, Any]:
+    """获取 Agent 详情"""
+    runner = _agents.get(agent_name)
+
+    if not runner:
+        return JSONResponse(
+            {"error": f"Agent 不存在: {agent_name}"},
+            status_code=404,
+        )
+
+    return {
+        "name": agent_name,
+        "status": runner.status.value,
+        "channel": runner.config.channel.value,
+        "model": f"{runner.config.model_provider}/{runner.config.model_name}",
+    }
+
+
+# ==================== 会话管理 API ====================
+
+
+@app.get("/api/sessions")
+async def list_sessions(agent_name: str = "") -> dict[str, Any]:
+    """列出活跃会话"""
+    sessions = []
+
+    for name, manager in _session_managers.items():
+        if agent_name and name != agent_name:
+            continue
+
+        active = await manager.list_active()
+        for session in active:
+            sessions.append(
+                {
+                    "session_id": session.session_id,
+                    "agent_id": session.agent_id,
+                    "user_id": session.user_id,
+                    "status": session.status.value,
+                }
+            )
+
+    return {
+        "sessions": sessions,
+        "total": len(sessions),
+    }
+
+
+# ==================== 服务启动入口 ====================
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8000, workers: int = 1) -> None:
