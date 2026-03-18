@@ -406,21 +406,22 @@ async def list_sessions(agent_name: str = "") -> dict[str, Any]:
 
 # ==================== 服务启动入口 ====================
 
+
 def run_server(host: str = "0.0.0.0", port: int = 8000, workers: int = 1) -> None:
     """
     启动 HeiMaClaw 服务
-    
+
     参数:
         host: 监听地址
         port: 监听端口
         workers: 工作进程数
     """
     import uvicorn
-    
-    info(f"启动 HeiMaClaw 服务")
+
+    info("启动 HeiMaClaw 服务")
     info(f"监听地址: {host}:{port}")
     info(f"工作进程: {workers}")
-    
+
     uvicorn.run(
         "heimaclaw.server:app",
         host=host,
@@ -432,12 +433,12 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, workers: int = 1) -> Non
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="HeiMaClaw 服务")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument("--port", type=int, default=8000, help="监听端口")
     parser.add_argument("--workers", type=int, default=1, help="工作进程数")
-    
+
     args = parser.parse_args()
-    
+
     run_server(host=args.host, port=args.port, workers=args.workers)
