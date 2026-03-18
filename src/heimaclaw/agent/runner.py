@@ -4,37 +4,34 @@ Agent 运行器模块
 管理 Agent 的生命周期和执行循环。
 """
 
-import asyncio
 import json
-import time
-from pathlib import Path
 from typing import Any, Optional
 
-from heimaclaw.console import agent_event, error, warning, info
+from heimaclaw.agent.session import Session, SessionManager
+from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
+from heimaclaw.console import agent_event, error, info, warning
 from heimaclaw.interfaces import (
     AgentConfig,
     AgentStatus,
     ChannelType,
-    Message as InterfaceMessage,
 )
-from heimaclaw.agent.session import Session, SessionManager
-from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
+from heimaclaw.llm.base import LLMProvider
+
+# LLM 相关导入
+from heimaclaw.llm.base import Message as LLMMessage
+from heimaclaw.llm.registry import get_llm_registry
 from heimaclaw.sandbox.base import SandboxBackend
 from heimaclaw.sandbox.firecracker import FirecrackerBackend
 from heimaclaw.sandbox.pool import WarmPool
-
-# LLM 相关导入
-from heimaclaw.llm.base import Message as LLMMessage, LLMProvider
-from heimaclaw.llm.registry import get_llm_registry
 
 
 class AgentRunner:
     """
     Agent 运行器
-    
+
     负责单个 Agent 的生命周期管理和消息处理。
     """
-    
+
     def __init__(
         self,
         agent_id: str,
@@ -47,7 +44,7 @@ class AgentRunner:
     ):
         """
         初始化 Agent 运行器
-        
+
         参数:
             agent_id: Agent ID
             config: Agent 配置
@@ -59,75 +56,75 @@ class AgentRunner:
         """
         self.agent_id = agent_id
         self.config = config
-        
+
         self.session_manager = session_manager or SessionManager()
         self.tool_registry = tool_registry or get_tool_registry()
         self.sandbox_backend = sandbox_backend
-        
+
         self._status = AgentStatus.STOPPED
         self._warm_pool = warm_pool
         self._sandbox_instance_id: Optional[str] = None
         self._active_sessions: dict[str, Session] = {}
-        
+
         # LLM 配置
         self._llm_config = llm_config or {}
         self._llm_adapter_name: Optional[str] = None
-    
+
     @property
     def status(self) -> AgentStatus:
         """获取 Agent 状态"""
         return self._status
-    
+
     async def start(self) -> None:
         """
         启动 Agent
-        
+
         初始化沙箱实例和 LLM，准备接收消息。
         """
         if self._status == AgentStatus.RUNNING:
             return
-        
+
         agent_event(f"启动 Agent: {self.agent_id}")
         self._status = AgentStatus.CREATING
-        
+
         try:
             # 初始化沙箱
             if self.config.sandbox_enabled:
                 await self._initialize_sandbox()
-            
+
             # 初始化 LLM
             await self._initialize_llm()
-            
+
             self._status = AgentStatus.RUNNING
             agent_event(f"Agent 已启动: {self.agent_id}")
-            
+
         except Exception as e:
             self._status = AgentStatus.ERROR
             error(f"Agent 启动失败: {e}")
             raise
-    
+
     async def stop(self) -> None:
         """
         停止 Agent
-        
+
         清理沙箱实例，关闭所有会话。
         """
         if self._status == AgentStatus.STOPPED:
             return
-        
+
         agent_event(f"停止 Agent: {self.agent_id}")
-        
+
         # 销毁沙箱实例
         if self._sandbox_instance_id and self.sandbox_backend:
             await self.sandbox_backend.destroy_instance(self._sandbox_instance_id)
             self._sandbox_instance_id = None
-        
+
         # 清理会话
         self._active_sessions.clear()
-        
+
         self._status = AgentStatus.STOPPED
         agent_event(f"Agent 已停止: {self.agent_id}")
-    
+
     async def process_message(
         self,
         user_id: str,
@@ -137,19 +134,19 @@ class AgentRunner:
     ) -> str:
         """
         处理用户消息
-        
+
         参数:
             user_id: 用户 ID
             channel: 渠道类型
             content: 消息内容
             session_id: 会话 ID（可选，不提供则创建新会话）
-            
+
         返回:
             Agent 响应内容
         """
         if self._status != AgentStatus.RUNNING:
             raise RuntimeError(f"Agent 状态异常: {self._status}")
-        
+
         # 获取或创建会话
         if session_id:
             session = await self.session_manager.get(session_id)
@@ -162,51 +159,51 @@ class AgentRunner:
                 user_id=user_id,
             )
             self._active_sessions[session.session_id] = session
-        
+
         # 添加用户消息
         await self.session_manager.add_message(
             session_id=session.session_id,
             role="user",
             content=content,
         )
-        
+
         agent_event(
             f"收到消息: session={session.session_id}, "
             f"user={user_id}, content={content[:50]}..."
         )
-        
+
         try:
             # 执行处理循环
             response = await self._execute_loop(session)
-            
+
             # 添加助手消息
             await self.session_manager.add_message(
                 session_id=session.session_id,
                 role="assistant",
                 content=response,
             )
-            
+
             return response
-            
+
         except Exception as e:
             error(f"处理消息失败: {e}")
-            
+
             # 添加错误消息
             await self.session_manager.add_message(
                 session_id=session.session_id,
                 role="assistant",
                 content=f"处理消息时发生错误: {e}",
             )
-            
+
             raise
-    
+
     async def _initialize_sandbox(self) -> None:
         """初始化沙箱实例"""
         if not self.sandbox_backend:
             # 使用默认 Firecracker 后端
             self.sandbox_backend = FirecrackerBackend()
             await self.sandbox_backend.initialize()
-        
+
         # 从预热池获取或创建实例
         if self._warm_pool:
             instance = await self._warm_pool.claim(self.agent_id)
@@ -218,24 +215,24 @@ class AgentRunner:
                 cpu_count=self.config.sandbox_cpu_count,
             )
             self._sandbox_instance_id = instance.instance_id
-        
+
         info(f"沙箱实例已创建: {self._sandbox_instance_id}")
-    
+
     async def _initialize_llm(self) -> None:
         """初始化 LLM 适配器"""
         if not self._llm_config:
             warning("未配置 LLM，将使用模拟响应")
             return
-        
+
         from heimaclaw.llm import LLMConfig
-        
+
         # 解析 provider
         provider_str = self._llm_config.get("provider", "openai")
         try:
             provider = LLMProvider(provider_str)
         except ValueError:
             provider = LLMProvider.OPENAI
-        
+
         # 创建 LLM 配置
         llm_config = LLMConfig(
             provider=provider,
@@ -245,45 +242,49 @@ class AgentRunner:
             temperature=self._llm_config.get("temperature", 0.7),
             max_tokens=self._llm_config.get("max_tokens", 4096),
         )
-        
+
         # 注册到全局注册表
         registry = get_llm_registry()
         adapter_name = f"{self.agent_id}-llm"
         registry.register(adapter_name, llm_config)
         self._llm_adapter_name = adapter_name
-        
+
         info(f"LLM 已配置: {provider.value}/{llm_config.model_name}")
-    
+
     async def _execute_loop(self, session: Session) -> str:
         """
         执行处理循环
-        
+
         规划 -> 执行 -> 响应
-        
+
         参数:
             session: 会话对象
-            
+
         返回:
             最终响应
         """
         # 获取会话历史
         messages = await self.session_manager.get_messages(session.session_id)
-        
+
         # 构建消息历史
         history = self._build_message_history(messages)
-        
+
         # 调用 LLM
         response = await self._call_llm(history)
-        
+
         # 检查是否需要工具调用
         tool_calls = response.get("tool_calls", [])
-        
+
         if tool_calls:
             # 执行工具调用
             for tool_call in tool_calls:
-                tool_name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-                tool_params = tool_call.get("parameters") or tool_call.get("function", {}).get("arguments", {})
-                
+                tool_name = tool_call.get("name") or tool_call.get("function", {}).get(
+                    "name", ""
+                )
+                tool_params = tool_call.get("parameters") or tool_call.get(
+                    "function", {}
+                ).get("arguments", {})
+
                 # 记录工具调用消息
                 await self.session_manager.add_message(
                     session_id=session.session_id,
@@ -292,35 +293,37 @@ class AgentRunner:
                     tool_name=tool_name,
                     tool_call_id=tool_call.get("id", ""),
                 )
-                
+
                 # 执行工具
                 tool_result = await self._execute_tool(
                     tool_name=tool_name,
                     parameters=tool_params,
                 )
-                
+
                 # 记录工具结果消息
                 await self.session_manager.add_message(
                     session_id=session.session_id,
                     role="tool",
-                    content=json.dumps(tool_result.result if tool_result.success else tool_result.error),
+                    content=json.dumps(
+                        tool_result.result if tool_result.success else tool_result.error
+                    ),
                     tool_name=tool_name,
                     tool_call_id=tool_call.get("id", ""),
                 )
-            
+
             # 递归调用获取最终响应
             return await self._execute_loop(session)
-        
+
         # 返回最终响应
         return response.get("content", "")
-    
+
     async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """
         调用 LLM
-        
+
         参数:
             messages: 消息历史
-            
+
         返回:
             LLM 响应字典
         """
@@ -330,81 +333,91 @@ class AgentRunner:
                 "content": "这是一个模拟的响应。请配置 API Key 以使用真实 LLM。",
                 "tool_calls": None,
             }
-        
+
         try:
             # 转换消息格式
             llm_messages = []
             for msg in messages:
                 llm_msg = LLMMessage(role=msg["role"], content=msg.get("content"))
                 llm_messages.append(llm_msg)
-            
+
             # 调用 LLM
             registry = get_llm_registry()
-            response = await registry.chat(llm_messages, adapter_name=self._llm_adapter_name)
-            
+            response = await registry.chat(
+                llm_messages, adapter_name=self._llm_adapter_name
+            )
+
             # 转换响应
             result = {
                 "content": response.content,
-                "tool_calls": [tc.to_dict() for tc in response.tool_calls] if response.tool_calls else None,
+                "tool_calls": [tc.to_dict() for tc in response.tool_calls]
+                if response.tool_calls
+                else None,
             }
-            
+
             info(f"LLM 响应: {response.total_tokens} tokens, {response.latency_ms}ms")
-            
+
             return result
-            
+
         except Exception as e:
             error(f"LLM 调用失败: {e}")
             return {
                 "content": f"LLM 调用失败: {e}",
                 "tool_calls": None,
             }
-    
+
     def _build_message_history(
         self,
         messages: list[Any],
     ) -> list[dict[str, Any]]:
         """
         构建消息历史
-        
+
         参数:
             messages: 消息列表
-            
+
         返回:
             格式化的消息历史
         """
         history = []
-        
+
         for msg in messages:
             if msg.role == "user":
                 history.append({"role": "user", "content": msg.content})
             elif msg.role == "assistant":
                 if msg.tool_name:
                     # 工具调用消息
-                    history.append({
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [{
-                            "id": msg.tool_call_id,
-                            "type": "function",
-                            "function": {
-                                "name": msg.tool_name,
-                                "arguments": msg.content,
-                            }
-                        }]
-                    })
+                    history.append(
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": msg.tool_call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": msg.tool_name,
+                                        "arguments": msg.content,
+                                    },
+                                }
+                            ],
+                        }
+                    )
                 else:
                     history.append({"role": "assistant", "content": msg.content})
             elif msg.role == "tool":
-                history.append({
-                    "role": "tool",
-                    "tool_call_id": msg.tool_call_id,
-                    "content": msg.content,
-                })
+                history.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": msg.tool_call_id,
+                        "content": msg.content,
+                    }
+                )
             elif msg.role == "system":
                 history.append({"role": "system", "content": msg.content})
-        
+
         return history
-    
+
     async def _execute_tool_in_sandbox(
         self,
         tool_name: str,
@@ -412,11 +425,11 @@ class AgentRunner:
     ) -> Any:
         """
         在沙箱中执行工具
-        
+
         参数:
             tool_name: 工具名称
             parameters: 工具参数
-            
+
         返回:
             工具执行结果
         """
@@ -424,12 +437,12 @@ class AgentRunner:
         if self._sandbox_instance_id and self.sandbox_backend:
             # 构建执行命令
             cmd = f"heimaclaw-tool {tool_name} '{json.dumps(parameters)}'"
-            
+
             result = await self.sandbox_backend.execute(
                 instance_id=self._sandbox_instance_id,
                 command=cmd,
             )
-            
+
             if result.exit_code == 0:
                 return {
                     "success": True,
@@ -440,14 +453,14 @@ class AgentRunner:
                     "success": False,
                     "error": result.stderr,
                 }
-        
+
         # 否则直接执行
         return await self.tool_registry.execute(tool_name, parameters)
-    
+
     def set_api_key(self, api_key: str) -> None:
         """
         设置 API Key
-        
+
         参数:
             api_key: API Key
         """

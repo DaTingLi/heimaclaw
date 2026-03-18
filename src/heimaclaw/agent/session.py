@@ -8,7 +8,7 @@ import asyncio
 import json
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,6 +19,7 @@ from heimaclaw.interfaces import ChannelType, SessionContext, SessionStatus
 @dataclass
 class Message:
     """消息数据结构"""
+
     message_id: str
     session_id: str
     role: str  # user / assistant / system / tool
@@ -27,11 +28,11 @@ class Message:
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Message":
         """从字典创建"""
@@ -41,6 +42,7 @@ class Message:
 @dataclass
 class Session:
     """会话数据结构"""
+
     session_id: str
     agent_id: str
     channel: ChannelType
@@ -51,7 +53,7 @@ class Session:
     messages: list[Message] = field(default_factory=list)
     context: dict[str, Any] = field(default_factory=dict)
     sandbox_instance_id: Optional[str] = None
-    
+
     def to_context(self) -> SessionContext:
         """转换为 SessionContext"""
         return SessionContext(
@@ -62,7 +64,7 @@ class Session:
             status=self.status,
             metadata=self.context,
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
@@ -77,7 +79,7 @@ class Session:
             "context": self.context,
             "sandbox_instance_id": self.sandbox_instance_id,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Session":
         """从字典创建"""
@@ -99,10 +101,10 @@ class Session:
 class SessionManager:
     """
     会话管理器
-    
+
     负责会话的创建、查询、更新、持久化。
     """
-    
+
     def __init__(
         self,
         data_dir: str = "/opt/heimaclaw/data/sessions",
@@ -110,7 +112,7 @@ class SessionManager:
     ):
         """
         初始化会话管理器
-        
+
         参数:
             data_dir: 会话数据存储目录
             auto_save: 是否自动保存
@@ -118,10 +120,10 @@ class SessionManager:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.auto_save = auto_save
-        
+
         self._sessions: dict[str, Session] = {}
         self._lock = asyncio.Lock()
-    
+
     async def create(
         self,
         agent_id: str,
@@ -130,19 +132,19 @@ class SessionManager:
     ) -> Session:
         """
         创建新会话
-        
+
         参数:
             agent_id: Agent ID
             channel: 渠道类型
             user_id: 用户 ID
-            
+
         返回:
             新创建的会话
         """
         async with self._lock:
             session_id = str(uuid.uuid4())[:8]
             now = time.time()
-            
+
             session = Session(
                 session_id=session_id,
                 agent_id=agent_id,
@@ -152,55 +154,55 @@ class SessionManager:
                 created_at=now,
                 updated_at=now,
             )
-            
+
             self._sessions[session_id] = session
-            
+
             agent_event(f"创建会话: {session_id} (agent={agent_id}, user={user_id})")
-            
+
             if self.auto_save:
                 await self._save_session(session)
-            
+
             return session
-    
+
     async def get(self, session_id: str) -> Optional[Session]:
         """
         获取会话
-        
+
         参数:
             session_id: 会话 ID
-            
+
         返回:
             会话对象，不存在则返回 None
         """
         # 先从内存中查找
         if session_id in self._sessions:
             return self._sessions[session_id]
-        
+
         # 从文件加载
         session = await self._load_session(session_id)
         if session:
             self._sessions[session_id] = session
-        
+
         return session
-    
+
     async def update(self, session: Session) -> None:
         """
         更新会话
-        
+
         参数:
             session: 要更新的会话
         """
         async with self._lock:
             session.updated_at = time.time()
             self._sessions[session.session_id] = session
-            
+
             if self.auto_save:
                 await self._save_session(session)
-    
+
     async def delete(self, session_id: str) -> None:
         """
         删除会话
-        
+
         参数:
             session_id: 会话 ID
         """
@@ -208,14 +210,14 @@ class SessionManager:
             # 从内存中移除
             if session_id in self._sessions:
                 del self._sessions[session_id]
-            
+
             # 删除文件
             session_file = self.data_dir / f"{session_id}.json"
             if session_file.exists():
                 session_file.unlink()
-            
+
             agent_event(f"删除会话: {session_id}")
-    
+
     async def add_message(
         self,
         session_id: str,
@@ -226,22 +228,22 @@ class SessionManager:
     ) -> Message:
         """
         添加消息到会话
-        
+
         参数:
             session_id: 会话 ID
             role: 角色（user/assistant/system/tool）
             content: 消息内容
             tool_name: 工具名称（可选）
             tool_call_id: 工具调用 ID（可选）
-            
+
         返回:
             新创建的消息
         """
         session = await self.get(session_id)
-        
+
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
-        
+
         message = Message(
             message_id=str(uuid.uuid4())[:8],
             session_id=session_id,
@@ -251,12 +253,12 @@ class SessionManager:
             tool_name=tool_name,
             tool_call_id=tool_call_id,
         )
-        
+
         session.messages.append(message)
         await self.update(session)
-        
+
         return message
-    
+
     async def get_messages(
         self,
         session_id: str,
@@ -264,83 +266,82 @@ class SessionManager:
     ) -> list[Message]:
         """
         获取会话消息
-        
+
         参数:
             session_id: 会话 ID
             limit: 最大消息数
-            
+
         返回:
             消息列表
         """
         session = await self.get(session_id)
-        
+
         if not session:
             return []
-        
+
         return session.messages[-limit:]
-    
+
     async def list_active(
         self,
         agent_id: Optional[str] = None,
     ) -> list[Session]:
         """
         列出活跃会话
-        
+
         参数:
             agent_id: 可选的 Agent ID 过滤
-            
+
         返回:
             活跃会话列表
         """
         sessions = [
-            s for s in self._sessions.values()
-            if s.status == SessionStatus.ACTIVE
+            s for s in self._sessions.values() if s.status == SessionStatus.ACTIVE
         ]
-        
+
         if agent_id:
             sessions = [s for s in sessions if s.agent_id == agent_id]
-        
+
         return sessions
-    
+
     async def close_idle(self, max_idle_seconds: int = 3600) -> int:
         """
         关闭空闲会话
-        
+
         参数:
             max_idle_seconds: 最大空闲时间（秒）
-            
+
         返回:
             关闭的会话数
         """
         now = time.time()
         closed_count = 0
-        
+
         async with self._lock:
             for session in list(self._sessions.values()):
                 idle_time = now - session.updated_at
-                
+
                 if idle_time > max_idle_seconds:
                     session.status = SessionStatus.CLOSED
                     await self._save_session(session)
                     closed_count += 1
                     info(f"关闭空闲会话: {session.session_id}")
-        
+
         return closed_count
-    
+
     async def _save_session(self, session: Session) -> None:
         """保存会话到文件"""
         session_file = self.data_dir / f"{session.session_id}.json"
-        
+
         with open(session_file, "w", encoding="utf-8") as f:
             json.dump(session.to_dict(), f, ensure_ascii=False, indent=2)
-    
+
     async def _load_session(self, session_id: str) -> Optional[Session]:
         """从文件加载会话"""
         session_file = self.data_dir / f"{session_id}.json"
-        
+
         if not session_file.exists():
             return None
-        
+
         try:
             with open(session_file, encoding="utf-8") as f:
                 data = json.load(f)

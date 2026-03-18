@@ -12,19 +12,22 @@ from rich.console import Console
 from rich.theme import Theme
 
 # 定义主题颜色
-THEME = Theme({
-    "debug": "grey50 italic",
-    "info": "cyan",
-    "success": "green bold",
-    "warning": "yellow bold",
-    "error": "red bold",
-    "critical": "magenta bold on white",
-    "agent": "blue bold",
-    "sandbox": "magenta",
-    "highlight": "cyan bold",
-    "dim": "grey50",
-    "title": "cyan bold",
-})
+THEME = Theme(
+    {
+        "debug": "grey50 italic",
+        "info": "cyan",
+        "success": "green bold",
+        "warning": "yellow bold",
+        "error": "red bold",
+        "critical": "magenta bold on white",
+        "agent": "blue bold",
+        "sandbox": "magenta",
+        "highlight": "cyan bold",
+        "dim": "grey50",
+        "title": "cyan bold",
+    }
+)
+
 
 # 检测是否禁用颜色
 def _should_use_color() -> bool:
@@ -105,15 +108,15 @@ def print_table(title_str: str, rows: list[list[str]], headers: list[str]) -> No
         headers: 表头列表
     """
     from rich.table import Table
-    
+
     table = Table(title=title_str, show_header=True, header_style="cyan bold")
-    
+
     for header in headers:
         table.add_column(header)
-    
+
     for row in rows:
         table.add_row(*row)
-    
+
     console.print(table)
 
 
@@ -127,6 +130,6 @@ def print_panel(content: str, title_str: str = "", style: str = "cyan") -> None:
         style: 面板样式
     """
     from rich.panel import Panel
-    
+
     panel = Panel(content, title=title_str if title_str else None, style=style)
     console.print(panel)

@@ -10,31 +10,31 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from heimaclaw.console import info, agent_event
+from heimaclaw.console import agent_event, info
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     应用生命周期管理
-    
+
     启动时初始化资源，关闭时清理资源。
     """
     info("HeiMaClaw 服务启动中...")
-    
+
     # TODO: 初始化沙箱池
     # TODO: 初始化渠道客户端
     # TODO: 加载 Agent 配置
-    
+
     info("HeiMaClaw 服务已就绪")
-    
+
     yield
-    
+
     info("HeiMaClaw 服务关闭中...")
-    
+
     # TODO: 清理沙箱实例
     # TODO: 关闭数据库连接
-    
+
     info("HeiMaClaw 服务已停止")
 
 
@@ -65,59 +65,62 @@ async def health() -> dict:
 
 # ==================== 飞书 Webhook ====================
 
+
 @app.post("/webhook/feishu")
 async def feishu_webhook(request: Request) -> Response:
     """
     飞书 Webhook 回调端点
-    
+
     接收飞书推送的消息事件。
     """
     body = await request.json()
-    
+
     # URL 验证
     if body.get("type") == "url_verification":
         challenge = body.get("challenge", "")
         agent_event(f"飞书 URL 验证: {challenge[:20]}...")
         return JSONResponse({"challenge": challenge})
-    
+
     # 消息处理
     event = body.get("event", {})
     message_type = event.get("message", {}).get("message_type", "unknown")
-    
+
     agent_event(f"收到飞书消息: type={message_type}")
-    
+
     # TODO: 路由到对应 Agent 的 microVM 执行
-    
+
     return Response(status_code=200)
 
 
 # ==================== 企业微信 Webhook ====================
 
+
 @app.post("/webhook/wecom")
 async def wecom_webhook(request: Request) -> Response:
     """
     企业微信 Webhook 回调端点
-    
+
     接收企业微信推送的消息事件。
     """
     body = await request.json()
-    
+
     # URL 验证
     if body.get("MsgType") == "event" and body.get("Event") == "change_contact":
         agent_event("企业微信通讯录变更事件")
         return Response(status_code=200)
-    
+
     # 消息处理
     msg_type = body.get("MsgType", "unknown")
-    
+
     agent_event(f"收到企业微信消息: type={msg_type}")
-    
+
     # TODO: 路由到对应 Agent 的 microVM 执行
-    
+
     return Response(status_code=200)
 
 
 # ==================== Agent 管理 API ====================
+
 
 @app.get("/api/agents")
 async def list_agents() -> dict:
@@ -141,6 +144,7 @@ async def get_agent(agent_id: str) -> dict:
 
 
 # ==================== 会话管理 API ====================
+
 
 @app.get("/api/sessions")
 async def list_sessions() -> dict:
