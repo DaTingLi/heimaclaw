@@ -1,5 +1,5 @@
 # 项目状态看板（模块 & 任务驱动版）
-最后更新：2026-03-18
+最后更新：2026-03-18 18:20
 
 ## 已完成模块
 
@@ -28,7 +28,7 @@
 - [x] SessionStore 接口
 - [x] ToolRegistry 接口
 - [x] AgentRunner 接口
-- [x] 数据模型定义（AgentConfig、SessionContext、Message 等）
+- [x] 数据模型定义
 
 ### 沙箱抽象层模块（接口完成度 70%）
 - [x] SandboxBackend 抽象基类
@@ -41,7 +41,7 @@
 - [ ] cgroup v2 限流
 - [ ] seccomp 过滤
 
-### Agent 运行时模块（接口完成度 80%）
+### Agent 运行时模块（接口完成度 90%）
 - [x] AgentRunner 运行器
 - [x] SessionManager 会话管理器
 - [x] ToolRegistry 工具注册表
@@ -50,7 +50,7 @@
 - [x] 工具注册/执行（装饰器模式）
 - [x] OpenAI 格式工具定义
 - [x] 消息处理循环框架
-- [ ] LLM 调用集成（已实现，待联调）
+- [x] LLM 调用集成
 - [ ] 沙箱中工具执行
 
 ### 渠道适配器模块（接口完成度 60%）
@@ -65,7 +65,7 @@
 
 ### LLM 集成模块（接口完成度 90%）
 - [x] LLMAdapter 抽象基类
-- [x] OpenAICompatibleAdapter（OpenAI 兼容）
+- [x] OpenAICompatibleAdapter
 - [x] OpenAI 适配器
 - [x] Claude 适配器
 - [x] GLM 智谱适配器
@@ -76,22 +76,26 @@
 - [x] LLMRegistry 注册表
 - [x] 工具调用支持
 - [x] 流式输出
-- [ ] 完整测试覆盖
+- [x] 真实 API 测试（智谱 GLM）
 
-### FastAPI 服务骨架（接口完成度 50%）
+### FastAPI 服务模块（接口完成度 90%）
 - [x] 基础 FastAPI 应用
 - [x] 飞书 webhook 端点
 - [x] 企业微信 webhook 端点
-- [ ] 消息路由到 Agent
-- [ ] 会话管理 API
+- [x] Agent 自动加载
+- [x] 消息路由到 Agent
+- [x] 会话管理 API
+- [x] Agent 管理 API
+- [ ] 真实飞书/企微联调
 
-### CI/CD 流水线（接口完成度 80%）
+### CI/CD 流水线（接口完成度 100%）
 - [x] GitHub Actions 工作流
 - [x] ruff lint 检查
 - [x] pytest 测试
 - [x] wheel 构建
 - [x] PyPI 发布配置
 - [x] GitHub Release 发布
+- [x] CI 通过验证
 
 ### 控制台输出模块（接口完成度 100%）
 - [x] rich 颜色主题
@@ -103,15 +107,16 @@
 - master
 
 ## 下一步意图
-1. 集成测试：Agent 运行时 + LLM + 渠道
-2. 完善 Firecracker microVM 隔离
-3. 实现完整的消息处理链路
+1. 真实飞书/企微联调测试
+2. 安装 Firecracker 实现 microVM 完整隔离
+3. 生产部署（systemd + 监控）
 
 ## 关键指标
 - 已定义接口数：7
-- 已实现接口数：7（ConfigLoader、SandboxBackend、CLI、WarmPool、AgentRunner、ChannelAdapter、LLMAdapter）
+- 已实现接口数：7
 - 阻塞项：0
-- 代码行数：约 7000+ 行
+- 代码行数：约 8500+ 行
+- CI/CD：通过 ✅
 
 ## 模块 SPEC 文档
 - [x] CLI 模块 SPEC
@@ -122,15 +127,12 @@
 
 ## LLM 支持矩阵
 
-| 厂商 | Provider | 模型示例 | API 格式 | 状态 |
-|------|----------|---------|---------|------|
-| **国内** |
-| 智谱 GLM | `glm` | glm-4 | OpenAI 兼容 | 已实现 |
-| DeepSeek | `deepseek` | deepseek-chat | OpenAI 兼容 | 已实现 |
-| 通义千问 | `qwen` | qwen-turbo | OpenAI 兼容 | 已实现 |
-| **国外** |
-| OpenAI | `openai` | gpt-4 | 原生 | 已实现 |
-| Claude | `claude` | claude-3-sonnet | 原生 | 已实现 |
-| **自定义** |
-| vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 已实现 |
-| Ollama | `ollama` | llama2 | OpenAI 兼容 | 已实现 |
+| 厂商 | Provider | 模型示例 | API 格式 | 测试状态 |
+|------|----------|---------|---------|---------|
+| 智谱 GLM | `glm` | glm-4-flash | OpenAI 兼容 | ✅ 已测试 |
+| DeepSeek | `deepseek` | deepseek-chat | OpenAI 兼容 | 待测试 |
+| 通义千问 | `qwen` | qwen-turbo | OpenAI 兼容 | 待测试 |
+| OpenAI | `openai` | gpt-4 | 原生 | 待测试 |
+| Claude | `claude` | claude-3-sonnet | 原生 | 待测试 |
+| vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 待测试 |
+| Ollama | `ollama` | llama2 | OpenAI 兼容 | 待测试 |
