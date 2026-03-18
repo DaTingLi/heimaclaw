@@ -1,5 +1,5 @@
 # 项目状态看板（模块 & 任务驱动版）
-最后更新：2026-03-18 18:30
+最后更新：2026-03-18 18:40
 
 ## 已完成模块
 
@@ -30,12 +30,16 @@
 - [x] AgentRunner 接口
 - [x] 数据模型定义
 
-### 沙箱抽象层模块（接口完成度 70%）
+### 沙箱抽象层模块（接口完成度 85%）
 - [x] SandboxBackend 抽象基类
-- [x] FirecrackerBackend 实现（含降级模式）
+- [x] FirecrackerBackend 实现
 - [x] WarmPool 预热池
 - [x] 实例创建/销毁
-- [x] 命令执行（降级模式）
+- [x] 命令执行
+- [x] Firecracker 安装（v1.15.0）
+- [x] Linux kernel（v5.15.0）
+- [x] Alpine rootfs（128MB）
+- [x] microVM 启动测试
 - [ ] vsock 通信
 - [ ] 快照创建/恢复
 - [ ] cgroup v2 限流
@@ -117,6 +121,15 @@ heimaclaw start
 ✓ API 端点可用
 ```
 
+### Firecracker
+```
+✓ 安装成功: v1.15.0
+✓ KVM 硬件虚拟化可用
+✓ microVM 启动测试成功
+✓ kernel: /opt/heimaclaw/images/vmlinux
+✓ rootfs: /opt/heimaclaw/images/rootfs.ext4
+```
+
 ### LLM 调用
 ```
 智谱 GLM API
@@ -135,7 +148,7 @@ heimaclaw start
 
 ## 下一步意图
 1. 真实飞书/企微联调测试
-2. 安装 Firecracker 实现 microVM 完整隔离
+2. 实现 vsock 通信
 3. 生产部署（systemd + 监控）
 
 ## 关键指标
@@ -144,6 +157,7 @@ heimaclaw start
 - 阻塞项：0
 - 代码行数：约 9000+ 行
 - CI/CD：通过 ✅
+- Firecracker：已安装 ✅
 
 ## 模块 SPEC 文档
 - [x] CLI 模块 SPEC
@@ -163,27 +177,3 @@ heimaclaw start
 | Claude | `claude` | claude-3-sonnet | 原生 | 待测试 |
 | vLLM | `vllm` | 用户部署 | OpenAI 兼容 | 待测试 |
 | Ollama | `ollama` | llama2 | OpenAI 兼容 | 待测试 |
-
-## Firecracker 安装完成
-
-### 安装内容
-- Firecracker v1.15.0
-- Jailer v1.15.0
-- Linux kernel (v5.15.0)
-- Alpine rootfs (128MB)
-
-### 验证结果
-```
-✓ Firecracker 检测成功
-✓ KVM 硬件虚拟化可用
-✓ microVM 启动测试成功
-```
-
-### 镜像文件位置
-- kernel: /opt/heimaclaw/images/vmlinux
-- rootfs: /opt/heimaclaw/images/rootfs.ext4
-
-### 下一步
-- [ ] 更新 FirecrackerBackend 使用真实配置
-- [ ] 实现 vsock 通信
-- [ ] 创建快照功能
