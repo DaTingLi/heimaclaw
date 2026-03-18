@@ -250,3 +250,53 @@ FastAPI 服务  █████████░░░  90%
 ---
 
 _严格遵循工程规范：测试 → 提交 → CI/CD → 进度记录 → 下一阶段_ ✨
+
+### Phase 2.1: 记忆管理器（✅ 已完成 2026-03-19 07:20）
+
+#### 完成时间
+- **开始**: 2026-03-19 07:10
+- **完成**: 2026-03-19 07:20
+- **耗时**: 约10分钟
+
+#### 核心模块（1208行）
+- [x] **SessionMemory** (`src/heimaclaw/memory/session.py`, 325行)
+  - 会话消息存储
+  - 最大消息数限制（1000条）
+  - 7天自动过期
+  - 持久化到磁盘
+
+- [x] **DailyMemory** (`src/heimaclaw/memory/daily.py`, 215行)
+  - 每日事件总结
+  - 30天保留
+  - Markdown 格式存储
+  - 事件搜索功能
+
+- [x] **LongTermMemory** (`src/heimaclaw/memory/longterm.py`, 329行)
+  - 重要事件永久保存
+  - 用户画像管理
+  - 100KB 自动压缩
+  - 关键词搜索
+
+- [x] **ContextBudget** (`src/heimaclaw/memory/budget.py`, 349行)
+  - 128K Token 预算分配
+  - 智能上下文裁剪
+  - 使用统计报告
+  - 多层次压缩策略
+
+#### 测试（~400行）
+- [x] `tests/memory/test_session.py` (11个测试用例)
+- [x] `tests/memory/test_daily.py` (8个测试用例)
+- [x] `tests/memory/test_longterm.py` (7个测试用例)
+
+#### 代码统计
+```
+总计：约1608行
+- SessionMemory：325行
+- DailyMemory：215行
+- LongTermMemory：329行
+- ContextBudget：349行
+- 测试代码：400行
+```
+
+---
+
