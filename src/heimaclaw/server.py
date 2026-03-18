@@ -16,7 +16,7 @@ from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.config.loader import get_config
-from heimaclaw.console import agent_event, error, info
+from heimaclaw.console import error, info
 from heimaclaw.interfaces import AgentConfig, ChannelType
 from heimaclaw.server_monitoring import router as monitoring_router
 
@@ -215,9 +215,24 @@ async def health() -> dict[str, Any]:
 async def feishu_webhook(request: Request) -> Response:
     """
     飞书 Webhook 回调端点
-
+    
     接收飞书推送的消息事件，路由到对应 Agent 处理。
     """
+    import json
+
+    # 解析请求体
+    try:
+        body = await request.json()
+    except Exception as e:
+        error(f"解析请求体失败: {e}")
+        return Response(status_code=400)
+
+    # URL 验证 - 飞书配置回调 URL 时会发送
+    if body.get("type") == "url_verification":
+        challenge = body.get("challenge", "")
+        info(f"飞书 URL 验证: {challenge}")
+        return JSONResponse({"challenge": challenge})
+
     # 获取适配器
     adapter = _channel_adapters.get("feishu")
 
@@ -227,69 +242,63 @@ async def feishu_webhook(request: Request) -> Response:
             status_code=503,
         )
 
-    # 验证请求
-    if not await adapter.verify_webhook(request):
-        return JSONResponse(
-            {"error": "验证失败"},
-            status_code=401,
-        )
-
-    # 解析消息
+    # 解析消息事件
     try:
-        inbound_msg = await adapter.parse_message(request)
-    except Exception as e:
-        error(f"解析飞书消息失败: {e}")
-        return Response(status_code=400)
+        event = body.get("event", {})
+        message = event.get("message", {})
+        sender = event.get("sender", {})
 
-    # URL 验证
-    if inbound_msg.message_type == "url_verification":
-        return JSONResponse({"challenge": inbound_msg.content})
+        user_id = sender.get("sender_id", {}).get("open_id", "")
+        content = message.get("content", "")
 
-    # 查找对应的 Agent
-    agent_name = "default"  # TODO: 根据消息路由到不同 Agent
-    runner = _agents.get(agent_name)
+        if not user_id or not content:
+            error("飞书消息缺少必要字段")
+            return Response(status_code=400)
 
-    if not runner:
-        agent_event(f"未找到 Agent: {agent_name}")
-        return Response(status_code=200)  # 返回 200 避免重试
+        # 解析消息内容（飞书 v2.0 格式）
+        if isinstance(content, str):
+            try:
+                content_obj = json.loads(content)
+                content_text = content_obj.get("text", "")
+            except Exception:
+                content_text = content
+        else:
+            content_text = str(content)
 
-    # 处理消息
-    try:
-        response = await runner.process_message(
-            user_id=inbound_msg.user_id,
+        info(f"收到飞书消息: user={user_id}, content={content_text[:50]}")
+
+        # 查找对应的 Agent
+        runner = _agents.get("default")
+
+        if not runner:
+            error("Agent 不存在: default")
+            return Response(status_code=404)
+
+        # 处理消息
+        response_text = await runner.process_message(
+            user_id=user_id,
             channel=ChannelType.FEISHU,
-            content=inbound_msg.content,
+            content=content_text,
         )
 
-        # 发送响应
+        # 发送回复
+        from heimaclaw.channel.base import OutboundMessage
 
-        sessions = await runner.session_manager.list_active()
-        user_sessions = [s for s in sessions if s.user_id == inbound_msg.user_id]
+        outbound = OutboundMessage(
+            user_id=user_id,
+            content=response_text,
+        )
 
-        if user_sessions:
-            session = user_sessions[-1]
-            await adapter.send_message(
-                session.to_context(),
-                response,
-            )
+        success = await adapter.send_message(outbound)
 
-        return Response(status_code=200)
+        if success:
+            return JSONResponse({"status": "ok"})
+        else:
+            return JSONResponse({"error": "发送失败"}, status_code=500)
 
     except Exception as e:
         error(f"处理飞书消息失败: {e}")
         return Response(status_code=500)
-
-
-async def _get_last_session_id(runner: AgentRunner, user_id: str) -> str:
-    """获取用户最近的会话 ID"""
-    sessions = await runner.session_manager.list_active()
-    for session in sessions:
-        if session.user_id == user_id:
-            return session.session_id
-    return ""
-
-
-# ==================== 企业微信 Webhook ====================
 
 
 @app.post("/webhook/wecom")
