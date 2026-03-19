@@ -63,7 +63,8 @@ async def load_agents() -> None:
                 config=AgentConfig(
                     name=agent_name,
                     description=agent_data.get("description", ""),
-                    channel=ChannelType.FEISHU, is_group=is_group,
+                    channel=ChannelType.FEISHU,
+                    is_group=is_group,
                     model_provider=agent_data.get("llm", {}).get("provider", "openai"),
                     model_name=agent_data.get("llm", {}).get("model_name", "gpt-4"),
                     sandbox_enabled=False,
@@ -99,7 +100,14 @@ async def stop_agents() -> None:
 
 
 async def handle_feishu_message(message: InboundMessage) -> None:
-    """处理飞书消息"""
+    """
+    处理飞书消息
+
+    消息路由逻辑：
+    1. 私聊 → 直接路由到用户绑定 Agent，回复用户
+    2. 群聊@Bot → 路由到被@的 Agent，回复群
+    3. 群聊不@Bot → 忽略（不回复）
+    """
     global _adapter, _router
 
     try:
@@ -110,13 +118,49 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         # 判断是否群聊
         is_group = chat_id.startswith("oc_")
 
-        # 使用路由器选择 Agent
-        agent_name = _router.route(user_id, chat_id, is_group)
+        # 获取机器人自己的 ID（用于检测 @）
+        bot_id = _adapter.client.app_id if _adapter else None
+
+        # 解析 @提及
+        mentions = _router.parse_mentions(content)
+
+        # 判断是否被 @（群聊中）
+        is_mentioned = (
+            any(
+                m.lower() in ["bot", "heimaclaw", "default", "test-bot", "test-glm"]
+                for m in mentions
+            )
+            if mentions
+            else False
+        )
 
         info(
             f"收到飞书消息: user={user_id}, chat={chat_id}, "
-            f"group={is_group}, agent={agent_name}, content={content[:50]}"
+            f"group={is_group}, is_mentioned={is_mentioned}, "
+            f"mentions={mentions}, content={content[:50]}"
         )
+
+        # ========== 路由逻辑 ==========
+
+        # 群聊不 @Bot → 忽略
+        if is_group and not is_mentioned:
+            info("群聊消息未 @Bot，忽略")
+            return
+
+        # 确定 Agent 名称
+        if is_group and is_mentioned:
+            # 群聊 @ 模式：路由到被 @ 的 Agent
+            agent_name = _router.route_with_mentions(
+                content=content,
+                user_id=user_id,
+                chat_id=chat_id,
+                is_group=True,
+            )[
+                0
+            ]  # 取第一个被 @ 的 Agent
+        else:
+            # 私聊或群聊（统一路由到绑定 Agent）
+            agent_name = _router.route(user_id, chat_id, is_group)
 
         # 查找对应的 Agent
         runner = _agents.get(agent_name)
@@ -129,10 +173,11 @@ async def handle_feishu_message(message: InboundMessage) -> None:
                 error("默认 Agent 也不存在")
                 return
 
-        # 处理消息
+        # 处理消息（私聊保持会话，群聊不保持）
         response_text = await runner.process_message(
             user_id=user_id,
-            channel=ChannelType.FEISHU, is_group=is_group,
+            channel=ChannelType.FEISHU,
+            is_group=is_group,
             content=content,
         )
 
@@ -140,8 +185,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         from heimaclaw.channel.base import OutboundMessage
         from heimaclaw.feishu.formatter import format_feishu_card
 
-        # 群聊：发送到群（chat_id）
-        # 私聊：发送给用户（chat_id = user_id）
+        # 群聊 → 群ID，私聊 → 用户ID
         card_content = format_feishu_card(response_text, agent_name=agent_name)
         outbound = OutboundMessage(
             chat_id=chat_id if is_group else user_id,
