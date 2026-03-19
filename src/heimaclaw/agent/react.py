@@ -185,21 +185,22 @@ class ReActEngine:
 
         # 直接调用 LLM
         try:
-            # 将 dict 转换为简单格式
+            # 使用 Message 类
+            from heimaclaw.llm.base import Message as LLMMessage
+            
             llm_messages = []
             for msg in messages:
                 role = msg.get("role", "user")
-                content = msg.get("content", "")
+                content_text = msg.get("content", "")
                 if role in ("user", "assistant", "system"):
-                    llm_messages.append({"role": role, "content": content})
+                    llm_messages.append(LLMMessage(role=role, content=content_text))
 
             # 添加系统提示
             if prompt:
-                llm_messages.insert(0, {"role": "system", "content": prompt})
+                llm_messages.insert(0, LLMMessage(role="system", content=prompt))
 
             response = await self.llm(
                 messages=llm_messages,
-                system_prompt=prompt if prompt else None,
             )
 
             # 解析响应
