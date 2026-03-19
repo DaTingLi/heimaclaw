@@ -203,3 +203,68 @@ def reload_config() -> Config:
     global _config
     _config = None
     return get_config()
+
+# 热重载集成
+_watcher_started = False
+
+
+def _on_config_file_changed(path: "Path"):
+    """配置文件变化时的回调"""
+    from heimaclaw.console import info
+
+    global _config
+    info(f"配置文件已变更: {path}，重新加载配置...")
+    _config = None
+
+    # 重新加载
+    loader = ConfigLoader()
+    _config = loader.load()
+    info("配置已重新加载")
+
+
+def start_config_watcher():
+    """
+    启动配置热重载监听器
+
+    自动监听默认配置路径，支持配置文件变更时自动重载。
+    """
+    global _watcher_started
+
+    if _watcher_started:
+        return
+
+    from pathlib import Path
+
+    from heimaclaw.config.watcher import start_watcher
+    from heimaclaw.console import info
+
+    # 监听所有默认配置路径
+    watch_paths = [
+        Path("/opt/heimaclaw/config"),
+        Path.home() / ".heimaclaw",
+    ]
+
+    # 只监听存在的路径
+    existing_paths = [p for p in watch_paths if p.exists()]
+
+    if existing_paths:
+        start_watcher(
+            watch_paths=existing_paths,
+            extensions={".toml", ".yaml", ".yml", ".json"},
+            callback=_on_config_file_changed,
+        )
+        _watcher_started = True
+        info(f"配置热重载监听已启动，监听 {len(existing_paths)} 个路径")
+
+
+def stop_config_watcher():
+    """停止配置热重载监听器"""
+    global _watcher_started
+
+    if _watcher_started:
+        from heimaclaw.config.watcher import stop_watcher
+        from heimaclaw.console import info
+
+        stop_watcher()
+        _watcher_started = False
+        info("配置热重载监听已停止")
