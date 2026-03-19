@@ -280,3 +280,34 @@ class ConfigCompiler:
             )
         except Exception as e:
             warning(f"保存哈希失败: {e}")
+
+
+def create_incremental_compiler(agents_dir: Path):
+    """
+    创建增量编译器回调函数
+
+    参数:
+        agents_dir: agents 目录路径
+
+    返回:
+        回调函数，接收 Path 参数
+    """
+    import asyncio
+
+    compiler = ConfigCompiler(agents_dir)
+
+    def on_markdown_changed(path: Path) -> None:
+        """Markdown 文件变化时的回调"""
+        # 从路径推断 agent 名称
+        # path 格式: /path/to/agents/{agent_name}/SOUL.md
+        try:
+            agent_name = path.parent.name
+            info(f"检测到 Markdown 配置变化: {path}，重新编译 {agent_name}...")
+
+            # 异步执行编译
+            asyncio.run(compiler.compile_agent(agent_name, force=True))
+            success(f"{agent_name} 重新编译完成")
+        except Exception as e:
+            error(f"增量编译失败: {e}")
+
+    return on_markdown_changed

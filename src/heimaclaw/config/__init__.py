@@ -4,7 +4,7 @@
 提供配置加载、解析、编译、热重载功能
 """
 
-from heimaclaw.config.compiler import ConfigCompiler
+from heimaclaw.config.compiler import ConfigCompiler, create_incremental_compiler
 from heimaclaw.config.loader import (
     ConfigLoader,
     get_config,
@@ -36,6 +36,7 @@ __all__ = [
     "MemoryConfig",
     # 配置编译
     "ConfigCompiler",
+    "create_incremental_compiler",
     # 热重载
     "ConfigWatcher",
     "ConfigFileHandler",
