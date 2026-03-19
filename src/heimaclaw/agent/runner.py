@@ -10,6 +10,8 @@ from typing import Any, Optional
 from heimaclaw.agent.session import Session, SessionManager
 from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
 from heimaclaw.console import agent_event, error, info, warning
+
+# 工具模块会在导入时自动注册 exec/read_file/write_file 工具
 from heimaclaw.interfaces import (
     AgentConfig,
     AgentStatus,
@@ -26,6 +28,72 @@ from heimaclaw.monitoring.metrics import record_token_usage
 from heimaclaw.sandbox.base import SandboxBackend
 from heimaclaw.sandbox.firecracker import FirecrackerBackend
 from heimaclaw.sandbox.pool import WarmPool
+
+
+def _register_all_tools():
+    """注册所有内置工具到全局注册表"""
+    from heimaclaw.agent.tools.exec_tool import exec_handler
+    from heimaclaw.agent.tools.read_tool import read_handler
+    from heimaclaw.agent.tools.write_tool import write_handler
+
+    registry = get_tool_registry()
+
+    # exec 工具
+    registry.register(
+        name="exec",
+        description="执行 Shell 命令并返回输出结果",
+        handler=exec_handler,
+        parameters={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "要执行的命令"},
+                "timeout": {
+                    "type": "integer",
+                    "description": "超时时间(秒)",
+                    "default": 30,
+                },
+                "cwd": {"type": "string", "description": "工作目录", "default": "/tmp"},
+            },
+            "required": ["command"],
+        },
+        timeout_ms=60000,
+    )
+
+    # read_file 工具
+    registry.register(
+        name="read_file",
+        description="读取文件内容",
+        handler=read_handler,
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件路径"},
+                "limit": {
+                    "type": "integer",
+                    "description": "最多读取行数",
+                    "default": 0,
+                },
+            },
+            "required": ["path"],
+        },
+        timeout_ms=10000,
+    )
+
+    # write_file 工具
+    registry.register(
+        name="write_file",
+        description="写入内容到文件",
+        handler=write_handler,
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件路径"},
+                "content": {"type": "string", "description": "内容"},
+            },
+            "required": ["path", "content"],
+        },
+        timeout_ms=10000,
+    )
 
 
 class AgentRunner:
@@ -62,6 +130,8 @@ class AgentRunner:
 
         self.session_manager = session_manager or SessionManager()
         self.tool_registry = tool_registry or get_tool_registry()
+        # 注册所有内置工具
+        _register_all_tools()
         self.sandbox_backend = sandbox_backend
 
         self._status = AgentStatus.STOPPED
@@ -351,7 +421,9 @@ class AgentRunner:
 
             registry = get_llm_registry()
             response = await registry.chat(
-                llm_messages, adapter_name=self._llm_adapter_name
+                messages=llm_messages,
+                adapter_name=self._llm_adapter_name,
+                tools=self.tool_registry.get_openai_tools(),
             )
 
             latency_ms = int((time.time() - start_time) * 1000)

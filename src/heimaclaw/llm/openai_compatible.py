@@ -209,9 +209,10 @@ class OpenAICompatibleAdapter(LLMAdapter):
             "stream": stream,
         }
 
-        # 添加工具
-        if self.config.tools:
-            body["tools"] = self.config.tools
+        # 添加工具（支持 config 和 kwargs 两种方式）
+        tools = kwargs.get("tools") or self.config.tools
+        if tools:
+            body["tools"] = tools
             if self.config.tool_choice:
                 body["tool_choice"] = self.config.tool_choice
 

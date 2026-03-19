@@ -1,7 +1,8 @@
 """
-工具注册表模块（兼容旧接口）
+Agent 工具模块
 
-兼容旧代码，从 tools.registry 导入。
+导出 ToolRegistry 和工具注册函数。
+工具实现在单独的模块中，避免循环导入。
 """
 
 from heimaclaw.agent.tools.registry import (
