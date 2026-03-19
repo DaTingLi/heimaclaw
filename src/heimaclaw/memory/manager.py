@@ -63,6 +63,11 @@ class MemoryManager:
         # Token 预算管理器
         self._budget = ContextBudget(max_tokens=max_tokens)
 
+        # 多层记忆系统
+        self._session_memory = SessionMemory(agent_id=agent_id, data_dir=data_dir)
+        self._daily_memory = DailyMemory(agent_id=agent_id, data_dir=data_dir)
+        self._longterm_memory = LongTermMemory(agent_id=agent_id, data_dir=data_dir)
+
         # 标记是否已摘要
         self._summarized = False
 
@@ -101,7 +106,7 @@ class MemoryManager:
         max_messages: int = 50,
     ) -> list[dict[str, str]]:
         """
-        获取用于 LLM 的上下文
+        获取用于 LLM 的上下文（多层记忆整合）
 
         参数:
             max_messages: 最大消息数
@@ -112,35 +117,35 @@ class MemoryManager:
         if not self.session_id:
             return []
 
-        # 检查是否有摘要
-        latest_summary = self._store.get_latest_summary(self.session_id)
         context = []
 
-        # 如果有摘要，加入摘要作为上下文
-        if latest_summary:
-            context.append(
-                {
-                    "role": "system",
-                    "content": f"[对话摘要] {latest_summary['summary']}",
-                }
-            )
+        # 1. 长期记忆（用户偏好、关键信息）
+        longterm = self._longterm_memory.get_context_for_user(self.user_id)
+        if longterm:
+            context.append({
+                "role": "system",
+                "content": f"[用户记忆] {longterm}"
+            })
 
-        # 获取消息（限制数量）
-        messages = self._store.get_messages(
-            self.session_id,
-            limit=max_messages,
-        )
+        # 2. 检查是否有摘要
+        latest_summary = self._store.get_latest_summary(self.session_id)
+        if latest_summary:
+            context.append({
+                "role": "system",
+                "content": f"[对话摘要] {latest_summary['summary']}"
+            })
+
+        # 3. 获取消息（限制数量）
+        messages = self._store.get_messages(self.session_id, limit=max_messages)
 
         # 格式化为对话格式
         for msg in messages:
             role = msg.get("role", "user")
             if role in ("user", "assistant", "system"):
-                context.append(
-                    {
-                        "role": role,
-                        "content": msg.get("content", ""),
-                    }
-                )
+                context.append({
+                    "role": role,
+                    "content": msg.get("content", ""),
+                })
 
         return context
 

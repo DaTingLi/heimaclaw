@@ -139,10 +139,29 @@ class ReActEngine:
                         success=True,
                     ))
 
-        # 如果达到最大迭代次数但有工具执行结果，用工具结果作为回复
-        if iteration >= self.MAX_ITERATIONS and tool_result_summary:
-            result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
-            result.success = True
+        # 如果有工具执行结果，让 LLM 总结
+        if tool_result_summary:
+            if has_tool_calls or iteration >= self.MAX_ITERATIONS:
+                # 有更多工具调用或达到最大迭代，用工具结果总结
+                result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
+            else:
+                # 让 LLM 总结工具结果
+                summary_prompt = f"""基于以下工具执行结果，请简洁总结回答用户的问题：
+
+工具执行结果：
+{tool_result_summary}
+
+请用自然语言简洁回复用户。"""
+                
+                # 调用 LLM 总结
+                try:
+                    summary_response = await self._call_llm(
+                        messages=[{"role": "user", "content": summary_prompt}],
+                        system_prompt="你是一个助手，基于工具执行结果回答用户问题。简洁明了。",
+                    )
+                    result.final_response = summary_response.get("content", tool_result_summary)
+                except Exception:
+                    result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
 
         return result
 
