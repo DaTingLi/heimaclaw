@@ -537,6 +537,8 @@ def agent_create(
     # Agent 配置目录
     agents_dir = Path("/opt/heimaclaw/data/agents")
     if not agents_dir.exists():
+        agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
 
@@ -588,6 +590,8 @@ def agent_list() -> None:
     title("Agent 列表")
 
     agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path("/opt/heimaclaw/data/agents")
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -1334,7 +1338,9 @@ def agent_compile(
     from heimaclaw.config.compiler import ConfigCompiler
 
     # 获取 agents 目录
-    agents_dir = Path.home() / ".heimaclaw" / "agents"
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
 
     if not agents_dir.exists():
         error("Agents 目录不存在，请先运行 'heimaclaw init' 初始化")
@@ -1421,7 +1427,9 @@ def agent_create_markdown(
     from pathlib import Path
 
     # Agent 目录
-    agents_dir = Path.home() / ".heimaclaw" / "agents"
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
     agent_dir = agents_dir / name
 
     if agent_dir.exists():
