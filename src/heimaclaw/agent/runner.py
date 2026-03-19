@@ -238,6 +238,49 @@ class AgentRunner:
 
         agent_event(f"停止 Agent: {self.agent_id}")
 
+    def _create_subagent_runner(self, **kwargs) -> "AgentRunner":
+        """创建子 Agent Runner 的工厂方法"""
+        from heimaclaw.agent.runner import AgentRunner
+        return AgentRunner(
+            agent_id=kwargs.get("agent_id", "subagent"),
+            config=self.config,
+            llm_config=kwargs.get("llm_config"),
+        )
+
+    async def spawn_subagent(
+        self,
+        task: str,
+        session_key: str,
+        model: Optional[str] = None,
+    ) -> SpawnResult:
+        """
+        派生子 Agent 执行任务
+
+        Args:
+            task: 任务描述
+            session_key: 会话 ID
+            model: 模型名称（可选）
+
+        Returns:
+            SpawnResult
+        """
+        if not self._subagent_spawner:
+            return SpawnResult(status="error", error="SubagentSpawner 未初始化")
+
+        config = SpawnConfig(
+            task=task,
+            agent_id=self.agent_id,
+            model=model,
+            mode="run",
+            timeout_seconds=300,
+        )
+
+        return await self._subagent_spawner.spawn(
+            config=config,
+            requester_session_key=session_key,
+            requester_agent_id=self.agent_id,
+        )
+
         # 销毁沙箱实例
         if self._sandbox_instance_id and self.sandbox_backend:
             await self.sandbox_backend.destroy_instance(self._sandbox_instance_id)
