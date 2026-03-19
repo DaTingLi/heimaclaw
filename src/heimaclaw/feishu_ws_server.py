@@ -137,6 +137,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             f"group={is_group}, is_mentioned={is_mentioned}, "
             f"mentions={mentions}, content={content[:80]}"
         )
+        info(f"私聊测试: is_group={is_group}, chat_id={chat_id}")
 
         # ========== 路由逻辑 ==========
 
@@ -157,6 +158,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             return
 
         # 确定 Agent 名称
+        info(f"路由选择: is_group={is_group}, is_mentioned={is_mentioned}")
         if is_group and is_mentioned:
             # 群聊 @ 模式：路由到被 @ 的 Agent
             agent_name = _router.route_with_mentions(
@@ -173,6 +175,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
 
         # 查找对应的 Agent
         runner = _agents.get(agent_name)
+        info(f"Agent 查找: agent_name={agent_name}, runner={runner}")
 
         if not runner:
             error(f"Agent 不存在: {agent_name}")
