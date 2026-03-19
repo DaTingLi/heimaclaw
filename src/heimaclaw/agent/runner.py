@@ -299,6 +299,8 @@ class AgentRunner:
             if self._memory_manager:
                 self._memory_manager.add_message("assistant", response, session.user_id)
 
+            # DEBUG: 记录返回类型
+            info(f"[DEBUG] process_message 返回类型: {type(response)}, 值: {str(response)[:80]}")
             return response
 
         except Exception as e:
