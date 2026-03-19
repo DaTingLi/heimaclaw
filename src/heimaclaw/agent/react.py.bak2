@@ -99,8 +99,6 @@ class ReActEngine:
         iteration = 0
         has_tool_calls = True
 
-        tool_result_summary = ""  # 累积工具执行结果
-        
         while has_tool_calls and iteration < self.MAX_ITERATIONS:
             iteration += 1
 
@@ -125,24 +123,20 @@ class ReActEngine:
                 # 执行工具
                 tool_results = await self._execute_tools(tool_calls, messages)
 
-                # 累积工具结果（用于最终回复）
                 for i, tool_result in enumerate(tool_results):
-                    tool_text = str(tool_result)
-                    tool_result_summary += f"\n{tool_text}"
                     messages.append({
                         "role": "tool",
-                        "content": tool_text,
+                        "content": str(tool_result),
                     })
                     result.steps.append(Step(
                         type=StepType.OBSERVATION,
-                        content=tool_text,
+                        content=str(tool_result),
                         success=True,
                     ))
 
-        # 如果达到最大迭代次数但有工具执行结果，用工具结果作为回复
-        if iteration >= self.MAX_ITERATIONS and tool_result_summary:
-            result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
-            result.success = True
+        if iteration >= self.MAX_ITERATIONS:
+            result.error = f"达到最大迭代次数 ({self.MAX_ITERATIONS})"
+            result.success = False
 
         return result
 
