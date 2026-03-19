@@ -12,6 +12,7 @@ HeiMaClaw CLI 入口模块
 - heimaclaw agent create
 """
 
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1994,7 +1995,11 @@ def log_command(
         subprocess.run(["tail", "-n", str(lines), "-f", str(log_file)])
     else:
         # 显示最近 N 行
-        result = subprocess.run(["tail", "-n", str(lines), str(log_file)], capture_output=True, text=True)
+        result = subprocess.run(
+            ["tail", "-n", str(lines), str(log_file)],
+            capture_output=True,
+            text=True,
+        )
         if result.stdout:
             console.print(result.stdout)
         if result.stderr:
