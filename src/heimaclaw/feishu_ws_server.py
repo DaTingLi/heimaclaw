@@ -187,7 +187,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
                 error("默认 Agent 也不存在")
                 return
 
-        info(f"开始处理消息: session={session_id}, user={user_id}")
+        info(f"开始处理消息: session=pending, user={user_id}")
 
         # 处理消息（私聊保持会话，群聊不保持）
         response_text = await runner.process_message(
