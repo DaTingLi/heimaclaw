@@ -162,9 +162,8 @@ class AgentRunner:
         self._react_engine: Optional[ReActEngine] = None
 
         # 上下文模式: "full"=完整历史, "compact"=摘要历史, "minimal"=仅当前
-        self._context_mode = (
-            config.context_mode if hasattr(config, "context_mode") else "full"
-        )
+        # 强制使用 full 模式启用记忆
+        self._context_mode = "full"
 
     @property
     def status(self) -> AgentStatus:
