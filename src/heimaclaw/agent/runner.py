@@ -25,6 +25,8 @@ from heimaclaw.llm.base import Message as LLMMessage
 from heimaclaw.llm.registry import get_llm_registry
 from heimaclaw.memory.manager import MemoryManager
 from heimaclaw.core.event_bus import EventBus, Event, EventType
+from heimaclaw.core.subagent_spawn import SubagentSpawner, SpawnConfig, SpawnResult
+from heimaclaw.core.subagent_registry import SubagentRegistry
 
 # 监控导入
 from heimaclaw.monitoring.metrics import record_token_usage
@@ -153,6 +155,9 @@ class AgentRunner:
         # 事件总线
         self._event_bus: Optional[EventBus] = None
 
+        # 子 Agent 派生器
+        self._subagent_spawner: Optional[SubagentSpawner] = None
+
         # ReAct 推理引擎
         self._react_engine: Optional[ReActEngine] = None
 
@@ -198,6 +203,14 @@ class AgentRunner:
 
             # 初始化事件总线
             self._event_bus = EventBus(base_dir=f"/tmp/heimaclaw_events_{self.agent_id}")
+
+            # 初始化子 Agent 派生器
+            self._subagent_registry = SubagentRegistry(base_dir=f"/tmp/heimaclaw_subagent_{self.agent_id}")
+            self._subagent_spawner = SubagentSpawner(
+                event_bus=self._event_bus,
+                registry=self._subagent_registry,
+                agent_runner_factory=self._create_subagent_runner,
+            )
 
             # 初始化 ReAct 推理引擎
             if self._llm_adapter:
