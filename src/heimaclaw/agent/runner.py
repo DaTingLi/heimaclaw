@@ -22,6 +22,7 @@ from heimaclaw.llm.base import LLMProvider
 # LLM 相关导入
 from heimaclaw.llm.base import Message as LLMMessage
 from heimaclaw.llm.registry import get_llm_registry
+from heimaclaw.memory.manager import MemoryManager
 
 # 监控导入
 from heimaclaw.monitoring.metrics import record_token_usage
@@ -143,6 +144,9 @@ class AgentRunner:
         self._llm_config = llm_config or {}
         self._llm_adapter_name: Optional[str] = None
 
+        # 记忆管理器
+        self._memory_manager: Optional[MemoryManager] = None
+
     @property
     def status(self) -> AgentStatus:
         """获取 Agent 状态"""
@@ -233,12 +237,16 @@ class AgentRunner:
             )
             self._active_sessions[session.session_id] = session
 
-        # 添加用户消息
+        # 添加用户消息到会话管理器
         await self.session_manager.add_message(
             session_id=session.session_id,
             role="user",
             content=content,
         )
+
+        # 添加用户消息到记忆管理器
+        if self._memory_manager:
+            self._memory_manager.add_message("user", content, session.user_id)
 
         agent_event(
             f"收到消息: session={session.session_id}, "
@@ -249,12 +257,16 @@ class AgentRunner:
             # 执行处理循环
             response = await self._execute_loop(session)
 
-            # 添加助手消息
+            # 添加助手消息到会话管理器
             await self.session_manager.add_message(
                 session_id=session.session_id,
                 role="assistant",
                 content=response,
             )
+
+            # 添加助手消息到记忆管理器
+            if self._memory_manager:
+                self._memory_manager.add_message("assistant", response, session.user_id)
 
             return response
 
@@ -341,6 +353,19 @@ class AgentRunner:
 
         # 构建消息历史
         history = self._build_message_history(messages)
+
+        # 注入记忆上下文（如果有）
+        if self._memory_manager:
+            # 更新 memory_manager 的 session_id 和 user_id
+            self._memory_manager.session_id = session.session_id
+            self._memory_manager.user_id = session.user_id
+
+            # 获取记忆上下文
+            memory_context = self._memory_manager.get_context_for_llm()
+
+            # 将记忆上下文注入到消息历史开头
+            if memory_context:
+                history = memory_context + history
 
         # 调用 LLM
         response = await self._call_llm(history)
