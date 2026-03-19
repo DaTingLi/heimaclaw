@@ -1,4 +1,4 @@
-"""MemoryManager 完整测试套件"""
+"""MemoryManager v2.0 完整测试套件"""
 
 import tempfile
 from pathlib import Path
@@ -17,9 +17,8 @@ def test_memory_manager_creation():
             data_dir=Path(tmpdir),
         )
         assert manager.agent_id == "test"
-        assert manager.session_memory is not None
-        assert manager.daily_memory is not None
-        assert manager.longterm_memory is not None
+        assert manager._store is not None
+        assert manager._auto_summary is not None
 
 
 def test_add_message():
@@ -36,7 +35,9 @@ def test_add_message():
         manager.add_message("user", "Hello")
         manager.add_message("assistant", "Hi")
 
-        assert manager.session_memory.get_message_count() == 2
+        # v2.0: 通过 store 查询
+        count = manager._store.get_message_count("session1")
+        assert count == 2
 
 
 def test_get_context_for_llm():
@@ -53,13 +54,13 @@ def test_get_context_for_llm():
         manager.add_message("user", "What's your name?")
         manager.add_message("assistant", "I am test")
 
+        # v2.0: 返回 list[dict]
         context = manager.get_context_for_llm()
 
-        assert "system_prompt" in context
-        assert "messages" in context
-        assert len(context["messages"]) == 2
-        assert "context_info" in context
-        assert context["context_info"]["session_messages"] == 2
+        assert isinstance(context, list)
+        assert len(context) == 2
+        assert context[0]["role"] == "user"
+        assert context[1]["role"] == "assistant"
 
 
 def test_extract_important_event():
@@ -73,14 +74,20 @@ def test_extract_important_event():
             data_dir=Path(tmpdir),
         )
 
-        manager.extract_important_event("User prefers Chinese", event_type="preference")
+        manager.extract_important_event(
+            "User prefers Chinese",
+            event_type="preference",
+            importance=8,
+        )
 
-        content = manager.longterm_memory.get_content()
-        assert "User prefers Chinese" in content
+        # v2.0: 通过 store 查询
+        events = manager._store.get_events(user_id="user1")
+        assert len(events) >= 1
+        assert any("Chinese" in e["content"] for e in events)
 
 
-def test_add_daily_event():
-    """测试添加日常事件"""
+def test_auto_extract_events():
+    """测试自动提取事件"""
     with tempfile.TemporaryDirectory() as tmpdir:
         manager = MemoryManager(
             agent_id="test",
@@ -90,14 +97,37 @@ def test_add_daily_event():
             data_dir=Path(tmpdir),
         )
 
-        manager.add_daily_event("Started conversation", event_type="general")
+        manager.add_message("user", "记住我喜欢用中文交流")
+        manager.add_message("assistant", "好的")
 
-        events = manager.daily_memory.get_events()
-        assert "Started conversation" in events
+        count = manager.auto_extract_events()
+        assert count >= 1
+
+
+def test_create_summary():
+    """测试创建摘要"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manager = MemoryManager(
+            agent_id="test",
+            session_id="session1",
+            channel="feishu",
+            user_id="user1",
+            data_dir=Path(tmpdir),
+        )
+
+        manager.add_message("user", "Hello")
+        manager.add_message("assistant", "Hi")
+
+        manager.create_summary("这是一个测试会话")
+
+        # v2.0: 摘要已存储
+        summary = manager._store.get_latest_summary("session1")
+        assert summary is not None
+        assert "测试会话" in summary["summary"]
 
 
 def test_get_usage_report():
-    """测试获取使用报告"""
+    """测试使用报告"""
     with tempfile.TemporaryDirectory() as tmpdir:
         manager = MemoryManager(
             agent_id="test",
@@ -107,18 +137,17 @@ def test_get_usage_report():
             data_dir=Path(tmpdir),
         )
 
-        manager.add_message("user", "Test")
-        manager.get_context_for_llm()
+        manager.add_message("user", "Hello")
 
         report = manager.get_usage_report()
 
-        assert "max_tokens" in report
-        assert "usage" in report
-        assert report["usage"]["total_used"] > 0
+        assert "session_id" in report
+        assert "message_count" in report
+        assert report["message_count"] == 1
 
 
 def test_cleanup_expired():
-    """测试清理过期记忆"""
+    """测试清理过期数据"""
     with tempfile.TemporaryDirectory() as tmpdir:
         manager = MemoryManager(
             agent_id="test",
@@ -128,9 +157,23 @@ def test_cleanup_expired():
             data_dir=Path(tmpdir),
         )
 
-        cleaned = manager.cleanup_expired()
+        result = manager.cleanup_expired()
 
-        assert "session" in cleaned
-        assert "daily" in cleaned
-        assert "total" in cleaned
-        assert isinstance(cleaned["total"], int)
+        assert "cleaned" in result
+
+
+def test_get_user_profile():
+    """测试用户画像"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manager = MemoryManager(
+            agent_id="test",
+            session_id="session1",
+            channel="feishu",
+            user_id="user1",
+            data_dir=Path(tmpdir),
+        )
+
+        manager.update_user_profile("language", "Chinese", confidence=8)
+
+        profile = manager.get_user_profile()
+        assert profile.get("language") == "Chinese"
