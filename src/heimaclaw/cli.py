@@ -226,6 +226,7 @@ def start_command(
         if not http:
             return
         import uvicorn
+
         uvicorn.run(
             "heimaclaw.server:app",
             host=host,
@@ -241,6 +242,7 @@ def start_command(
         import asyncio
 
         from heimaclaw.feishu_ws_server import main as feishu_main
+
         asyncio.run(feishu_main())
 
     try:
@@ -1812,3 +1814,141 @@ def agent_show_policy(
     )
 
     console.print(table)
+
+
+# ==================== 服务生命周期命令 ====================
+
+
+@app.command("stop")
+def stop_command(
+    force: bool = typer.Option(False, "--force", "-f", help="强制终止"),
+) -> None:
+    """
+    停止 HeiMaClaw 服务
+
+    示例:
+        heimaclaw stop        # 正常停止
+        heimaclaw stop -f    # 强制终止
+    """
+    import signal
+    import subprocess
+
+    title("停止 HeiMaClaw 服务")
+
+    # 查找进程
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "heimaclaw"],
+            capture_output=True,
+            text=True,
+        )
+        pids = result.stdout.strip().split("\n")
+
+        if not pids or not pids[0]:
+            info("没有运行中的 HeiMaClaw 服务")
+            return
+
+        killed = []
+        for pid in pids:
+            if pid.isdigit():
+                try:
+                    if force:
+                        os.kill(int(pid), signal.SIGKILL)
+                    else:
+                        os.kill(int(pid), signal.SIGTERM)
+                    killed.append(pid)
+                except ProcessLookupError:
+                    pass
+
+        if killed:
+            success(f"已停止服务 (PID: {', '.join(killed)})")
+        else:
+            info("没有运行中的服务")
+
+    except Exception as e:
+        error(f"停止服务失败: {e}")
+        raise typer.Exit(1)
+
+
+@app.command("restart")
+def restart_command(
+    force: bool = typer.Option(False, "--force", "-f", help="强制终止"),
+) -> None:
+    """
+    重启 HeiMaClaw 服务
+
+    示例:
+        heimaclaw restart      # 正常重启
+        heimaclaw restart -f   # 强制重启
+    """
+    import signal
+    import subprocess
+
+    title("重启 HeiMaClaw 服务")
+
+    # 查找进程
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "heimaclaw"],
+            capture_output=True,
+            text=True,
+        )
+        pids = result.stdout.strip().split("\n")
+
+        if pids and pids[0]:
+            # 停止旧服务
+            for pid in pids:
+                if pid.isdigit():
+                    try:
+                        if force:
+                            os.kill(int(pid), signal.SIGKILL)
+                        else:
+                            os.kill(int(pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+            info("已停止旧服务")
+
+        # 等待进程结束
+        import time
+
+        time.sleep(2)
+
+        # 启动新服务
+        info("启动新服务...")
+        subprocess.Popen(
+            ["heimaclaw", "start"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        success("服务已重启!")
+
+    except Exception as e:
+        error(f"重启服务失败: {e}")
+        raise typer.Exit(1)
+
+
+@app.command("pid")
+def pid_command() -> None:
+    """
+    查看 HeiMaClaw 服务进程 ID
+
+    示例:
+        heimaclaw pid
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["pgrep", "-f", "heimaclaw"],
+        capture_output=True,
+        text=True,
+    )
+    pids = result.stdout.strip().split("\n")
+
+    if not pids or not pids[0]:
+        info("没有运行中的 HeiMaClaw 服务")
+        return
+
+    console.print("\n[bold]运行中的 HeiMaClaw 进程:[/bold]")
+    for pid in pids:
+        if pid.isdigit():
+            console.print(f"  PID: {pid}")
