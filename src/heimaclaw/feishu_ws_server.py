@@ -189,6 +189,16 @@ async def handle_feishu_message(message: InboundMessage) -> None:
 
         info(f"开始处理消息: session=pending, user={user_id}")
 
+        # 添加 Typing Indicator（类似 OpenClaw）
+        typing_reaction_id = None
+        if _adapter and message.message_id:
+            try:
+                typing_reaction_id = await _adapter.add_typing_indicator(message.message_id)
+                if typing_reaction_id:
+                    info(f"[Typing] 添加 Typing Indicator: {typing_reaction_id}")
+            except Exception as e:
+                info(f"[Typing] 添加 Typing Indicator 失败: {e}")
+
         # 处理消息（私聊保持会话，群聊不保持）
         response_text = await runner.process_message(
             user_id=user_id,
@@ -218,6 +228,14 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             content=card_content,
             message_type="interactive",
         )
+
+        # 移除 Typing Indicator
+        if _adapter and message.message_id and typing_reaction_id:
+            try:
+                await _adapter.remove_typing_indicator(message.message_id, typing_reaction_id)
+                info(f"[Typing] 移除 Typing Indicator: {typing_reaction_id}")
+            except Exception as e:
+                info(f"[Typing] 移除 Typing Indicator 失败: {e}")
 
         if _adapter:
             success = await _adapter.send_message(outbound)
