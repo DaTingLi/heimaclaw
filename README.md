@@ -154,3 +154,4 @@ mypy src/
 ## License
 
 MIT
+# Trigger CI
