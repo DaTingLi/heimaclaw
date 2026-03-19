@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from heimaclaw.agent.tools import ToolRegistry, ToolResult
+from heimaclaw.agent.tools import ToolRegistry
+from heimaclaw.interfaces import ToolResult
 
 
 class StepType(str, Enum):
