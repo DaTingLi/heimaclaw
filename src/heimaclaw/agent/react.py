@@ -100,7 +100,7 @@ class ReActEngine:
         has_tool_calls = True
 
         tool_result_summary = ""  # 累积工具执行结果
-        
+
         while has_tool_calls and iteration < self.MAX_ITERATIONS:
             iteration += 1
 
@@ -152,7 +152,7 @@ class ReActEngine:
 {tool_result_summary}
 
 请用自然语言简洁回复用户。"""
-                
+
                 # 调用 LLM 总结
                 try:
                     summary_response = await self._call_llm(
@@ -199,7 +199,7 @@ class ReActEngine:
 
             # DEBUG: 打印原始响应
             print(f"[DEBUG] LLM 原始响应 type={type(response)}, content={getattr(response, 'content', 'N/A')}, tool_calls={getattr(response, 'tool_calls', 'N/A')}")
-            
+
             # 解析响应
             if hasattr(response, "tool_calls") and response.tool_calls:
                 return {
@@ -266,7 +266,7 @@ class ReActEngine:
                 if isinstance(args, str):
                     try:
                         args = json.loads(args)
-                    except:
+                    except Exception:
                         args = {}
 
                 result: ToolResult = await self.tool_registry.execute(

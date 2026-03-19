@@ -22,12 +22,12 @@ __all__ = [
     "Event",
     "EventType",
     "EventLevel",
-    
+
     # Subagent Registry
     "SubagentRegistry",
     "SubagentRun",
     "SubagentStatus",
-    
+
     # Subagent Spawner
     "SubagentSpawner",
     "SpawnConfig",
