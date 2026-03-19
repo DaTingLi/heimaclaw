@@ -260,7 +260,7 @@ class AgentRunner:
             self._active_sessions[session.session_id] = session
 
         # 标记是否加载历史
-        session.metadata["load_history"] = not is_group_chat
+        session.context["load_history"] = not is_group_chat
 
         # 添加用户消息到会话管理器
         await self.session_manager.add_message(
@@ -379,7 +379,7 @@ class AgentRunner:
         """
         # 获取会话历史（群聊模式不加载历史）
         messages = await self.session_manager.get_messages(session.session_id)
-        if not session.metadata.get("load_history", True):
+        if not session.context.get("load_history", True):
             # 群聊模式：只保留最新消息（当前用户消息）
             if messages:
                 messages = [messages[-1]]
