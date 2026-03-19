@@ -340,6 +340,82 @@ class FeishuWebSocketAdapter(ChannelAdapter):
         # 飞书 SDK 暂不支持优雅关闭
         info("飞书 WebSocket 适配器已停止")
 
+
+
+    async def add_typing_indicator(self, message_id: str) -> Optional[str]:
+        """
+        添加 Typing Indicator（emoji reaction）
+
+        参数:
+            message_id: 消息 ID
+
+        返回:
+            reaction_id 或 None
+        """
+        try:
+            from lark_oapi.api.im.v1 import CreateMessageReactionRequest
+
+            request = (
+                CreateMessageReactionRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    {
+                        "reaction_type": {
+                            "emoji_type": "Typing"  # 使用 Typing emoji
+                        }
+                    }
+                )
+                .build()
+            )
+
+            response = self.client.im.v1.message_reaction.create(request)
+
+            if response.success():
+                reaction_id = getattr(response.data, 'reaction_id', None) if hasattr(response, 'data') else None
+                info(f"添加 Typing Indicator 成功: {reaction_id}")
+                return reaction_id
+            else:
+                error(f"添加 Typing Indicator 失败: code={response.code}, msg={response.msg}")
+                return None
+
+        except Exception as e:
+            error(f"添加 Typing Indicator 异常: {e}")
+            return None
+
+    async def remove_typing_indicator(self, message_id: str, reaction_id: str) -> bool:
+        """
+        移除 Typing Indicator
+
+        参数:
+            message_id: 消息 ID
+            reaction_id: Reaction ID
+
+        返回:
+            是否成功
+        """
+        try:
+            from lark_oapi.api.im.v1 import DeleteMessageReactionRequest
+
+            request = (
+                DeleteMessageReactionRequest.builder()
+                .message_id(message_id)
+                .reaction_id(reaction_id)
+                .build()
+            )
+
+            response = self.client.im.v1.message_reaction.delete(request)
+
+            if response.success():
+                info(f"移除 Typing Indicator 成功")
+                return True
+            else:
+                error(f"移除 Typing Indicator 失败: code={response.code}, msg={response.msg}")
+                return False
+
+        except Exception as e:
+            error(f"移除 Typing Indicator 异常: {e}")
+            return False
+
     def _is_duplicate_message(self, message_id: str) -> bool:
         """检查消息是否重复"""
         return message_id in self._processed_messages
