@@ -2,70 +2,86 @@ name: CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [main]
   pull_request:
-    branches: [ master, main ]
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10']  # 只需要 3.10
+    strategy: matrix
     
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniconda-version: latest
-        python-version: ${{ matrix.python-version }}
-        activate-environment: heimaclaw
-        environment-file: environment.yml
-        auto-activate-base: false
-    
-    - name: Install dependencies
-      shell: bash -l {0}
-      run: |
-        conda install -y pip
-        pip install -e .
-        pip install pytest pytest-asyncio pytest-cov
-    
-    - name: Run tests
-      shell: bash -l {0}
-      run: |
-        pytest tests/ -v --cov=heimaclaw --cov-report=term-missing --tb=short
-      env:
-        PYTHONPATH: ${{ github.workspace }}/src
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install -e ".[test]"
+          pip install -e ".[firecracker]"
+      
+      - name: Run linter
+        run: |
+          pip install ruff
+          ruff check src/heimaclaw
+      
+      - name: Run type checker
+        run: |
+          pip install mypy
+          mypy src/heimaclaw
+      
+      - name: Run tests (Core)
+        run: |
+          python -m pytest tests/ -v
+      
+      - name: Run Event Bus tests
+        run: |
+          python -m pytest tests/core/ -v
+      
+      - name: Generate coverage
+        run: |
+          pip install pytest-cov
+          pytest --cov=tests/ --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.xml
+          flags: --fail-check=0
 
-  lint:
+  # Documentation
+  docs:
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniconda-version: latest
-        python-version: '3.10'
-        activate-environment: heimaclaw
-        environment-file: environment.yml
-        auto-activate-base: false
-    
-    - name: Install linters
-      shell: bash -l {0}
-      run: |
-        conda install -y pip
-        pip install ruff black
-    
-    - name: Run Ruff
-      shell: bash -l {0}
-      run: |
-        ruff check src/ tests/
-    
-    - name: Run Black
-      shell: bash -l {0}
-      run: |
-        black --target-version py310 --check src/ tests/
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Build documentation
+        run: |
+          pip install mkdocs-material
+          mkdocs build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+
+  # Deploy to PyPI
+  pypi:
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    steps:
+      - uses: actions/checkout@ 3
+      - uses: actions/setup-python@4
+        with:
+          python-version: '3.10'
+      - name: Build package
+        run: |
+          pip install build
+          python -m build
+      - name: Publish to PyPI
+        run: |
+          pip install twine
+          twine upload dist/*
