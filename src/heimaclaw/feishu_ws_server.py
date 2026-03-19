@@ -135,7 +135,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         info(
             f"收到飞书消息: user={user_id}, chat={chat_id}, "
             f"group={is_group}, is_mentioned={is_mentioned}, "
-            f"mentions={mentions}, content={content[:50]}"
+            f"mentions={mentions}, content={content[:80]}"
         )
 
         # ========== 路由逻辑 ==========

@@ -22,6 +22,7 @@ class InboundMessage:
     content: str
     message_type: str  # text / post / interactive
     timestamp: float
+    mentions: list[str] = field(default_factory=list)  # 被 @ 的用户 ID 列表
     raw_data: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
