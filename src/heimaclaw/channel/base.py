@@ -21,6 +21,7 @@ class InboundMessage:
     user_name: Optional[str]
     content: str
     message_type: str  # text / post / interactive
+    chat_type: str = "p2p"  # p2p=私聊, group=群聊
     timestamp: float
     mentions: list[str] = field(default_factory=list)  # 被 @ 的用户 ID 列表
     raw_data: dict[str, Any] = field(default_factory=dict[str, Any])

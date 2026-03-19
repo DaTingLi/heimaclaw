@@ -114,8 +114,8 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         chat_id = message.chat_id
         content = message.content
 
-        # 判断是否群聊
-        is_group = chat_id.startswith("oc_")
+        # 判断是否群聊：使用飞书原生的 chat_type 字段
+        is_group = message.chat_type == "group"
 
         # 获取机器人自己的 ID（用于检测 @）
 
