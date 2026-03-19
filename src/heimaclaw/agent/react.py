@@ -179,20 +179,38 @@ class ReActEngine:
         messages: list[dict[str, str]],
         system_prompt: str,
     ) -> dict:
-        """调用 LLM"""
+        """调用 LLM（简化版，不使用工具）"""
         # 构建提示
-        tools = self.tool_registry.get_openai_tools()
-
         prompt = self._build_react_prompt(system_prompt)
 
-        # 调用 LLM
-        response = await self.llm(
-            messages=messages,
-            system_prompt=prompt,
-            tools=tools,
-        )
+        # 直接调用 LLM
+        try:
+            # 将 dict 转换为简单格式
+            llm_messages = []
+            for msg in messages:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role in ("user", "assistant", "system"):
+                    llm_messages.append({"role": role, "content": content})
 
-        return response
+            # 添加系统提示
+            if prompt:
+                llm_messages.insert(0, {"role": "system", "content": prompt})
+
+            response = await self.llm(
+                messages=llm_messages,
+            )
+
+            # 解析响应
+            if hasattr(response, "content"):
+                return {"content": response.content, "tool_calls": None}
+            elif isinstance(response, dict):
+                return {"content": response.get("content", ""), "tool_calls": None}
+            else:
+                return {"content": str(response), "tool_calls": None}
+
+        except Exception as e:
+            return {"content": f"LLM 调用失败: {e}", "tool_calls": None}
 
     def _build_react_prompt(self, system_prompt: str) -> str:
         """构建 ReAct 提示"""
