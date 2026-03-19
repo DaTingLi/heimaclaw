@@ -320,9 +320,13 @@ class AgentRunner:
 
         # 获取或创建会话
         if session_id:
-            session = await self.session_manager.get(session_id)
-            if not session:
-                raise ValueError(f"会话不存在: {session_id}")
+            try:
+                session = await self.session_manager.get(session_id)
+                if not session:
+                    # 会话不存在，使用 None 让 SessionManager 创建新会话
+                    session_id = None
+            except Exception:
+                session_id = None
         else:
             session = await self.session_manager.create(
                 agent_id=self.agent_id,
