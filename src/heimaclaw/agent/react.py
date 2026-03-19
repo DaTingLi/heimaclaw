@@ -172,6 +172,9 @@ class ReActEngine:
                 tools=tools if tools else None,
             )
 
+            # DEBUG: 打印原始响应
+            print(f"[DEBUG] LLM 原始响应 type={type(response)}, content={getattr(response, 'content', 'N/A')}, tool_calls={getattr(response, 'tool_calls', 'N/A')}")
+            
             # 解析响应
             if hasattr(response, "tool_calls") and response.tool_calls:
                 return {
