@@ -1,4 +1,5 @@
 """自动记忆摘要模块"""
+
 import re
 from typing import Any
 
@@ -71,11 +72,13 @@ class AutoSummary:
                 for match in matches:
                     if match not in seen_contents:
                         seen_contents.add(match)
-                        events.append({
-                            "type": event_type,
-                            "content": match,
-                            "importance": importance,
-                        })
+                        events.append(
+                            {
+                                "type": event_type,
+                                "content": match,
+                                "importance": importance,
+                            }
+                        )
 
         events.sort(key=lambda x: x["importance"], reverse=True)
         return events
@@ -84,9 +87,11 @@ class AutoSummary:
         self,
         messages: list[dict[str, str]],
     ) -> str:
-        recent = messages[-self.message_threshold:]
-        text = "\n".join([
-            f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')[:200]}"
-            for msg in recent
-        ])
+        recent = messages[-self.message_threshold :]
+        text = "\n".join(
+            [
+                f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')[:200]}"
+                for msg in recent
+            ]
+        )
         return self.SUMMARY_PROMPT.format(messages=text)

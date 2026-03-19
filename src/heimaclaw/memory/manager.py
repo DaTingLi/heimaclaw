@@ -7,6 +7,7 @@
 - 智能事件提取：自动识别重要信息
 - Token 预算管理：动态分配
 """
+
 from pathlib import Path
 from typing import Any, Optional
 
@@ -60,12 +61,7 @@ class MemoryManager:
         )
 
         # Token 预算管理器
-        self._budget = ContextBudget(
-            max_tokens=max_tokens,
-            system_prompt_ratio=0.15,
-            context_ratio=0.25,
-            history_ratio=0.60,
-        )
+        self._budget = ContextBudget(max_tokens=max_tokens)
 
         # 标记是否已摘要
         self._summarized = False
@@ -122,10 +118,12 @@ class MemoryManager:
 
         # 如果有摘要，加入摘要作为上下文
         if latest_summary:
-            context.append({
-                "role": "system",
-                "content": f"[对话摘要] {latest_summary['summary']}",
-            })
+            context.append(
+                {
+                    "role": "system",
+                    "content": f"[对话摘要] {latest_summary['summary']}",
+                }
+            )
 
         # 获取消息（限制数量）
         messages = self._store.get_messages(
@@ -137,10 +135,12 @@ class MemoryManager:
         for msg in messages:
             role = msg.get("role", "user")
             if role in ("user", "assistant", "system"):
-                context.append({
-                    "role": role,
-                    "content": msg.get("content", ""),
-                })
+                context.append(
+                    {
+                        "role": role,
+                        "content": msg.get("content", ""),
+                    }
+                )
 
         return context
 

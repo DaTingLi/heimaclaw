@@ -1,4 +1,5 @@
 """SQLite 记忆存储层"""
+
 import sqlite3
 from pathlib import Path
 from typing import Any, Optional
@@ -83,12 +84,10 @@ class SQLiteStore:
             "ON messages(session_id, created_at)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_user "
-            "ON events(user_id, agent_id)"
+            "CREATE INDEX IF NOT EXISTS idx_events_user " "ON events(user_id, agent_id)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_type "
-            "ON events(event_type)"
+            "CREATE INDEX IF NOT EXISTS idx_events_type " "ON events(event_type)"
         )
 
         conn.commit()
@@ -261,8 +260,7 @@ class SQLiteStore:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT key, value FROM user_profile "
-            "WHERE user_id = ? AND agent_id = ?",
+            "SELECT key, value FROM user_profile " "WHERE user_id = ? AND agent_id = ?",
             (user_id, agent_id),
         )
         return {row["key"]: row["value"] for row in cursor.fetchall()}
