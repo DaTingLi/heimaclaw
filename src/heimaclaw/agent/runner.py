@@ -472,7 +472,13 @@ class AgentRunner:
 
             return await self._execute_loop(session)
 
-        return response.get("content", "")
+        # 确保返回字符串
+        if hasattr(response, "content"):
+            return response.content
+        elif isinstance(response, dict):
+            return response.get("content", "")
+        else:
+            return str(response)
 
     async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """
