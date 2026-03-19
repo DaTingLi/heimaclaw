@@ -144,6 +144,7 @@ class AgentRunner:
         # LLM 配置
         self._llm_config = llm_config or {}
         self._llm_adapter_name: Optional[str] = None
+        self._llm_adapter = None
 
         # 记忆管理器
         self._memory_manager: Optional[MemoryManager] = None
@@ -355,6 +356,7 @@ class AgentRunner:
         adapter_name = f"{self.agent_id}-llm"
         registry.register(adapter_name, llm_config)
         self._llm_adapter_name = adapter_name
+        self._llm_adapter = registry.get(adapter_name)
 
         info(f"LLM 已配置: {provider.value}/{llm_config.model_name}")
 
