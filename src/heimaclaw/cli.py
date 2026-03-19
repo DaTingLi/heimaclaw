@@ -567,6 +567,14 @@ def agent_create(
             "api_key": "",
         },
         "tools": [],
+        "policy": {
+            "mode": "mention",
+            "scope": "both",
+            "allow_all_users": True,
+            "allow_all_groups": True,
+            "whitelist_users": [],
+            "whitelist_groups": [],
+        },
         "created_at": None,  # 运行时填充
     }
 
@@ -1623,3 +1631,149 @@ def discover_chats() -> None:
             console.print(table)
         else:
             info("暂无会话历史记录")
+
+
+# ==================== Agent 策略命令 ====================
+
+
+@agent_app.command("set-policy")
+def agent_set_policy(
+    name: str = typer.Argument(..., help="Agent 名称"),
+    mode: str = typer.Option(
+        "mention", "--mode", "-m", help="响应模式: mention/open/disabled"
+    ),
+    scope: str = typer.Option(
+        "both", "--scope", "-s", help="作用范围: private/group/both"
+    ),
+    allow_users: bool = typer.Option(
+        True, "--allow-users/--no-allow-users", help="是否允许所有用户"
+    ),
+    allow_groups: bool = typer.Option(
+        True, "--allow-groups/--no-allow-groups", help="是否允许所有群"
+    ),
+) -> None:
+    """
+    设置 Agent 的响应策略
+
+    示例:
+        # 群聊只响应 @，私聊正常响应
+        heimaclaw agent set-policy my-agent --mode mention --scope both
+
+        # 只允许私聊
+        heimaclaw agent set-policy my-agent --mode open --scope private
+
+        # 禁用群聊
+        heimaclaw agent set-policy my-agent --scope private
+    """
+    import json
+    from pathlib import Path
+
+    # 验证参数
+    if mode not in ("mention", "open", "disabled"):
+        error(f"无效的响应模式: {mode}")
+        raise typer.Exit(1)
+
+    if scope not in ("private", "group", "both"):
+        error(f"无效的作用范围: {scope}")
+        raise typer.Exit(1)
+
+    # 查找 Agent 配置
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
+
+    config_file = agents_dir / name / "agent.json"
+
+    if not config_file.exists():
+        error(f"Agent 不存在: {name}")
+        raise typer.Exit(1)
+
+    # 读取配置
+    with open(config_file, encoding="utf-8") as f:
+        config = json.load(f)
+
+    # 更新策略
+    config["policy"] = {
+        "mode": mode,
+        "scope": scope,
+        "allow_all_users": allow_users,
+        "allow_all_groups": allow_groups,
+        "whitelist_users": config.get("policy", {}).get("whitelist_users", []),
+        "whitelist_groups": config.get("policy", {}).get("whitelist_groups", []),
+    }
+
+    # 保存配置
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+    success(f"已更新 Agent {name} 的策略")
+    info(f"  响应模式: {mode}")
+    info(f"  作用范围: {scope}")
+    info(f"  允许所有用户: {allow_users}")
+    info(f"  允许所有群: {allow_groups}")
+
+
+@agent_app.command("show-policy")
+def agent_show_policy(
+    name: str = typer.Argument(..., help="Agent 名称"),
+) -> None:
+    """
+    显示 Agent 的响应策略
+    """
+    import json
+    from pathlib import Path
+
+    from rich.table import Table
+
+    # 查找 Agent 配置
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
+
+    config_file = agents_dir / name / "agent.json"
+
+    if not config_file.exists():
+        error(f"Agent 不存在: {name}")
+        raise typer.Exit(1)
+
+    # 读取配置
+    with open(config_file, encoding="utf-8") as f:
+        config = json.load(f)
+
+    policy = config.get("policy", {})
+
+    # 显示策略
+    table = Table(title=f"Agent {name} 响应策略")
+    table.add_column("配置项")
+    table.add_column("值")
+    table.add_column("说明")
+
+    mode = policy.get("mode", "mention")
+    mode_desc = {"mention": "@提及才响应", "open": "响应所有人", "disabled": "禁用"}
+    table.add_row("响应模式", mode, mode_desc.get(mode, ""))
+
+    scope = policy.get("scope", "both")
+    scope_desc = {"private": "只私聊", "group": "只群聊", "both": "私聊+群聊"}
+    table.add_row("作用范围", scope, scope_desc.get(scope, ""))
+
+    allow_users = policy.get("allow_all_users", True)
+    table.add_row("允许所有用户", str(allow_users), "")
+
+    allow_groups = policy.get("allow_all_groups", True)
+    table.add_row("允许所有群", str(allow_groups), "")
+
+    whitelist_users = policy.get("whitelist_users", [])
+    table.add_row(
+        "用户白名单",
+        str(len(whitelist_users)),
+        ", ".join(whitelist_users) if whitelist_users else "-",
+    )
+
+    whitelist_groups = policy.get("whitelist_groups", [])
+    table.add_row(
+        "群白名单",
+        str(len(whitelist_groups)),
+        ", ".join(whitelist_groups) if whitelist_groups else "-",
+    )
+
+    console.print(table)
