@@ -343,6 +343,7 @@ class AgentRunner:
 
         # 添加用户消息到记忆管理器
         if self._memory_manager:
+            info(f"[DEBUG] Memory add_message: session={session.session_id}, user={session.user_id}, content={content[:30]}...")
             self._memory_manager.add_message("user", content, session.user_id)
 
         agent_event(
@@ -468,13 +469,13 @@ class AgentRunner:
         history = self._build_message_history(messages)
 
         # 注入记忆上下文（根据上下文模式）
-        info(f"[DEBUG] Memory context_mode: {self._context_mode}, memory_manager: {self._memory_manager}")
+        info(f"[DEBUG] Memory context_mode: {self._context_mode}, memory_manager: {self._memory_manager}, session_id: {session.session_id}")
         if self._memory_manager and self._context_mode != "minimal":
             self._memory_manager.session_id = session.session_id
             self._memory_manager.user_id = session.user_id
 
             memory_context = self._memory_manager.get_context_for_llm()
-            info(f"[DEBUG] Memory context: {len(memory_context) if memory_context else 0} messages")
+            info(f"[DEBUG] Memory context: {len(memory_context) if memory_context else 0} messages, session_id: {self._memory_manager.session_id}")
             if memory_context:
                 if self._context_mode == "full":
                     history = memory_context + history
