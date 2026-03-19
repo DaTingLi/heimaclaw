@@ -225,6 +225,7 @@ class AgentRunner:
         channel: ChannelType,
         content: str,
         session_id: Optional[str] = None,
+        is_group: bool = False,
     ) -> str:
         """
         处理用户消息
@@ -234,6 +235,7 @@ class AgentRunner:
             channel: 渠道类型
             content: 消息内容
             session_id: 会话 ID（可选，不提供则创建新会话）
+            is_group: 是否群聊（群聊不保持会话历史）
 
         返回:
             Agent 响应内容
@@ -242,7 +244,7 @@ class AgentRunner:
             raise RuntimeError(f"Agent 状态异常: {self._status}")
 
         # 判断是否是群聊（群聊不保持会话历史）
-        is_group_chat = channel == ChannelType.FEISHU_GROUP
+        is_group_chat = is_group
 
         # 获取或创建会话
         if session_id:

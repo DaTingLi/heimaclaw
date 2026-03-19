@@ -63,7 +63,7 @@ async def load_agents() -> None:
                 config=AgentConfig(
                     name=agent_name,
                     description=agent_data.get("description", ""),
-                    channel=ChannelType.FEISHU,
+                    channel=ChannelType.FEISHU, is_group=is_group,
                     model_provider=agent_data.get("llm", {}).get("provider", "openai"),
                     model_name=agent_data.get("llm", {}).get("model_name", "gpt-4"),
                     sandbox_enabled=False,
@@ -132,7 +132,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         # 处理消息
         response_text = await runner.process_message(
             user_id=user_id,
-            channel=ChannelType.FEISHU,
+            channel=ChannelType.FEISHU, is_group=is_group,
             content=content,
         )
 
