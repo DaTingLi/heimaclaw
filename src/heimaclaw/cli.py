@@ -239,6 +239,7 @@ def start_command(
         if not feishu:
             return
         import asyncio
+
         from heimaclaw.feishu_ws_server import main as feishu_main
         asyncio.run(feishu_main())
 
