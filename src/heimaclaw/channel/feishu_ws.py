@@ -224,7 +224,11 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             if message.message_type == "interactive":
                 # 卡片消息：content 已经是 JSON 字符串
                 msg_type = "interactive"
-                content = message.content if isinstance(message.content, str) else json.dumps(message.content)
+                content = (
+                    message.content
+                    if isinstance(message.content, str)
+                    else json.dumps(message.content)
+                )
             else:
                 # 文本消息
                 msg_type = "text"
