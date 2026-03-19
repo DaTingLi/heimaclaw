@@ -24,7 +24,6 @@ from heimaclaw.llm.base import LLMProvider
 from heimaclaw.llm.base import Message as LLMMessage
 from heimaclaw.llm.registry import get_llm_registry
 from heimaclaw.memory.manager import MemoryManager
-from heimaclaw.core.event_bus import EventBus, Event, EventType
 
 # 监控导入
 from heimaclaw.monitoring.metrics import record_token_usage
@@ -150,9 +149,6 @@ class AgentRunner:
         # 记忆管理器
         self._memory_manager: Optional[MemoryManager] = None
 
-        # 事件总线
-        self._event_bus: Optional[EventBus] = None
-
         # ReAct 推理引擎
         self._react_engine: Optional[ReActEngine] = None
 
@@ -185,16 +181,6 @@ class AgentRunner:
 
             # 初始化 LLM
             await self._initialize_llm()
-
-            # 初始化记忆管理器
-            if self._memory_manager is None:
-                self._memory_manager = MemoryManager(
-                    agent_id=self.agent_id,
-                    db_path=f"/tmp/heimaclaw_memory_{self.agent_id}.db",
-                )
-
-            # 初始化事件总线
-            self._event_bus = EventBus(base_dir=f"/tmp/heimaclaw_events_{self.agent_id}")
 
             # 初始化 ReAct 推理引擎
             if self._llm_adapter:
@@ -566,19 +552,6 @@ class AgentRunner:
             }
 
             info(f"LLM 响应: {response.total_tokens} tokens, {latency_ms}ms")
-
-            # 发射 LLM 响应事件
-            if self._event_bus:
-                await self._event_bus.emit(Event(
-                    type=EventType.MESSAGE_RECEIVED,
-                    agent_id=self.agent_id,
-                    session_key=session_key,
-                    data={
-                        "content": response.content,
-                        "model": response.model,
-                        "tokens": response.total_tokens,
-                    },
-                ))
 
             # DEBUG: 检查 result["content"] 的类型和值
             info(f"[DEBUG] _call_llm result['content'] 类型: {type(result['content'])}, 值: {str(result['content'])[:80]}")
