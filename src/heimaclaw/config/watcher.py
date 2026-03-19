@@ -35,7 +35,7 @@ class ConfigFileHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = Path(event.src_path)
+        path = Path(str(event.src_path))
         if path.suffix in self.extensions:
             self._debounced_callback(path)
 
@@ -44,7 +44,7 @@ class ConfigFileHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = Path(event.src_path)
+        path = Path(str(event.src_path))
         if path.suffix in self.extensions:
             self._debounced_callback(path)
 
@@ -53,7 +53,7 @@ class ConfigFileHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = Path(event.src_path)
+        path = Path(str(event.src_path))
         if path.suffix in self.extensions:
             info(f"配置文件已删除: {path}")
 
