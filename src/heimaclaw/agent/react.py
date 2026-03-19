@@ -66,7 +66,7 @@ class ReActEngine:
     ReAct 推理引擎
     """
 
-    MAX_ITERATIONS = 10
+    MAX_ITERATIONS = 3  # 减少迭代次数避免重复调用
 
     def __init__(
         self,

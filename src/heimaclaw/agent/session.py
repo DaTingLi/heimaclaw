@@ -129,6 +129,7 @@ class SessionManager:
         agent_id: str,
         channel: ChannelType,
         user_id: str,
+        session_id: Optional[str] = None,
     ) -> Session:
         """
         创建新会话
@@ -137,12 +138,14 @@ class SessionManager:
             agent_id: Agent ID
             channel: 渠道类型
             user_id: 用户 ID
+            session_id: 会话 ID（可选，不提供则自动生成）
 
         返回:
             新创建的会话
         """
         async with self._lock:
-            session_id = str(uuid.uuid4())[:8]
+            if not session_id:
+                session_id = str(uuid.uuid4())[:8]
             now = time.time()
 
             session = Session(
