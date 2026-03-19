@@ -344,7 +344,7 @@ class AgentRunner:
         # 添加用户消息到记忆管理器
         if self._memory_manager:
             info(f"[DEBUG] Memory add_message: session={session.session_id}, user={session.user_id}, content={content[:30]}...")
-            self._memory_manager.add_message("user", content, session.user_id)
+            self._memory_manager.add_message("user", content, session.session_id)
 
         agent_event(
             f"收到消息: session={session.session_id}, "
@@ -370,7 +370,7 @@ class AgentRunner:
 
             # 添加助手消息到记忆管理器
             if self._memory_manager:
-                self._memory_manager.add_message("assistant", response, session.user_id)
+                self._memory_manager.add_message("assistant", response, session.session_id)
 
             # DEBUG: 记录返回类型
             info(f"[DEBUG] process_message 返回类型: {type(response)}, 值: {str(response)[:80]}")
