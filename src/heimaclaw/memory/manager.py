@@ -14,6 +14,9 @@ from typing import Any, Optional
 from heimaclaw.memory.budget import ContextBudget
 from heimaclaw.memory.storage.auto_summary import AutoSummary
 from heimaclaw.memory.storage.sqlite_store import SQLiteStore
+from heimaclaw.memory.session import SessionMemory
+from heimaclaw.memory.daily import DailyMemory
+from heimaclaw.memory.longterm import LongTermMemory
 
 
 class MemoryManager:
@@ -63,10 +66,10 @@ class MemoryManager:
         # Token 预算管理器
         self._budget = ContextBudget(max_tokens=max_tokens)
 
-        # 多层记忆系统
-        self._session_memory = SessionMemory(agent_id=agent_id, data_dir=data_dir)
-        self._daily_memory = DailyMemory(agent_id=agent_id, data_dir=data_dir)
-        self._longterm_memory = LongTermMemory(agent_id=agent_id, data_dir=data_dir)
+        # 多层记忆系统（延迟初始化，在 set_session 时创建）
+        self._session_memory: Optional[Any] = None
+        self._daily_memory = DailyMemory(agent_id=agent_id)
+        self._longterm_memory = LongTermMemory(agent_id=agent_id)
 
         # 标记是否已摘要
         self._summarized = False
@@ -120,12 +123,16 @@ class MemoryManager:
         context = []
 
         # 1. 长期记忆（用户偏好、关键信息）
-        longterm = self._longterm_memory.get_context_for_user(self.user_id)
-        if longterm:
-            context.append({
-                "role": "system",
-                "content": f"[用户记忆] {longterm}"
-            })
+        try:
+            longterm = self._longterm_memory.get_content()
+            # 检查是否有实际内容（不只是默认模板）
+            if longterm and len(longterm.strip()) > 400:
+                context.append({
+                    "role": "system",
+                    "content": f"[用户记忆] {longterm}"
+                })
+        except Exception:
+            pass
 
         # 2. 检查是否有摘要
         latest_summary = self._store.get_latest_summary(self.session_id)
