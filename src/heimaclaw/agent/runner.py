@@ -163,7 +163,7 @@ class AgentRunner:
 
         # 上下文模式: "full"=完整历史, "compact"=摘要历史, "minimal"=仅当前
         self._context_mode = (
-            config.context_mode if hasattr(config, "context_mode") else "minimal"
+            config.context_mode if hasattr(config, "context_mode") else "full"
         )
 
     @property
@@ -469,11 +469,13 @@ class AgentRunner:
         history = self._build_message_history(messages)
 
         # 注入记忆上下文（根据上下文模式）
+        info(f"[DEBUG] Memory context_mode: {self._context_mode}, memory_manager: {self._memory_manager}")
         if self._memory_manager and self._context_mode != "minimal":
             self._memory_manager.session_id = session.session_id
             self._memory_manager.user_id = session.user_id
 
             memory_context = self._memory_manager.get_context_for_llm()
+            info(f"[DEBUG] Memory context: {len(memory_context) if memory_context else 0} messages")
             if memory_context:
                 if self._context_mode == "full":
                     history = memory_context + history
