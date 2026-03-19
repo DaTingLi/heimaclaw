@@ -184,7 +184,11 @@ class ReActEngine:
             elif isinstance(response, dict):
                 return {"content": response.get("content", ""), "tool_calls": None}
             else:
-                return {"content": str(response), "tool_calls": None}
+                # 确保提取 .content 属性
+                if hasattr(response, "content"):
+                    return {"content": response.content or "", "tool_calls": None}
+                else:
+                    return {"content": str(response), "tool_calls": None}
 
         except Exception as e:
             return {"content": f"LLM 调用失败: {e}", "tool_calls": None}
