@@ -1576,3 +1576,50 @@ _这个文件定义了我的基本身份_
     info("  - SOUL.md - 核心定位")
     info("  - IDENTITY.md - 身份信息")
     info("  - memory/ - 记忆目录")
+
+
+# ==================== 群组发现命令 ====================
+
+
+@bindings_app.command("discover")
+def discover_chats() -> None:
+    """
+    列出从会话历史中发现的 chat_id
+
+    用于帮助用户发现群组 ID。
+    """
+    from pathlib import Path
+
+    from rich.table import Table
+
+    info("群组发现功能")
+    print("")
+    info("获取群组 ID 的方法：")
+    info("  1. 在飞书群中给机器人发消息")
+    info("  2. 查看日志: tail -f logs/heimaclaw.log | grep chat_id")
+    info("  3. 日志中会显示: oc_xxxxxxx 格式的群组 ID")
+    print("")
+
+    # 尝试从会话目录中获取历史 chat_id
+    sessions_dir = Path("/tmp/heimaclaw/sessions")
+    if sessions_dir.exists():
+        chat_ids = set()
+        for session_file in sessions_dir.rglob("*.json"):
+            # 从文件名中提取 chat_id
+            parts = session_file.stem.split("_")
+            if len(parts) >= 2:
+                chat_ids.add(parts[1])
+
+        if chat_ids:
+            info("从会话历史中发现的 chat_id：")
+            table = Table()
+            table.add_column("Chat ID")
+            table.add_column("类型")
+
+            for chat_id in sorted(chat_ids):
+                chat_type = "群聊" if chat_id.startswith("oc_") else "私聊"
+                table.add_row(chat_id, chat_type)
+
+            console.print(table)
+        else:
+            info("暂无会话历史记录")
