@@ -605,3 +605,118 @@ pytest tests/ -v
 
 ---
 
+
+---
+
+## 🚨 CI/CD 环境问题 - 已解决
+
+### 问题描述
+- CI 中出现 Python 3.11 测试
+- 但实际项目只需要 Python 3.10
+- 本地使用 venv，无法测试 3.11
+
+### 解决方案
+
+#### 1. 修复 CI 配置
+- **移除 Python 3.11**
+- **只保留 Python 3.10**
+- **使用 conda 环境管理**
+
+#### 2. 安装 Conda
+
+**安装步骤**：
+```bash
+# 1. 下载 Miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# 2. 安装
+bash Miniconda3-latest-Linux-x86_64.sh -b -p /root/miniconda3
+
+# 3. 配置 PATH
+export PATH="/root/miniconda3/bin:$PATH"
+```
+
+**安装结果**：
+```
+✅ Miniconda 已安装到 /root/miniconda3
+✅ Python 版本: 3.10.12
+✅ 环境名称: heimaclaw
+```
+
+#### 3. 创建 Conda 环境
+
+```bash
+# 创建环境
+conda create -n heimaclaw python=3.10 -y
+
+# 激活环境
+conda activate heimaclaw
+
+# 安装依赖
+pip install -e .
+pip install pytest pytest-asyncio pytest-cov ruff black
+
+# 运行测试
+pytest tests/ -v
+```
+
+**测试结果**：
+```
+✅ 48 passed, 1 skipped
+✅ 100% 测试通过
+```
+
+### 环境管理决策
+
+#### 为什么使用 Conda？
+1. **版本管理** - 管理多个 Python 版本
+2. **环境隔离** - 不同项目使用不同环境
+3. **与 CI 一致** - 确保本地与 CI 环境一致
+4. **可复现** - 任何人都可以用相同环境运行
+
+#### Conda vs Venv
+
+| 特性 | Conda | Venv |
+|------|-------|------|
+| 多版本管理 | ✅ | ❌ |
+| 与 CI 一致 | ✅ | ❌ |
+| 易于分享 | ✅ (environment.yml) | ❌ |
+| 安装大小 | 较大 | 较小 |
+| 学习曲线 | 较陡 | 较平 |
+
+### 相关文件
+
+| 文件 | 说明 |
+|------|------|
+| `environment.yml` | Conda 环境定义 |
+| `.github/workflows/ci.yml` | CI 配置（已修复） |
+| `/root/miniconda3` | Conda 安装位置 |
+| `heimaclaw` conda env | 项目环境 |
+
+### 未来使用
+
+```bash
+# 激活环境
+conda activate heimaclaw
+
+# 运行测试
+pytest tests/ -v
+
+# 退出环境
+conda deactivate
+```
+
+### 记录时间
+- **问题发现**: 2026-03-19 09:25
+- **问题解决**: 2026-03-19 09:30
+- **解决时间**: 约 5 分钟
+
+### Git 提交
+- **Commit**: `最新提交`
+- **修复**: CI 配置 + Conda 安装
+- **状态**: ✅ 已推送到 GitHub
+
+---
+
+**问题已解决！Conda 环境已就绪！** ✅
+
