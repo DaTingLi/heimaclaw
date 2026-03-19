@@ -190,7 +190,10 @@ class AgentRunner:
             if self._memory_manager is None:
                 self._memory_manager = MemoryManager(
                     agent_id=self.agent_id,
-                    db_path=f"/tmp/heimaclaw_memory_{self.agent_id}.db",
+                    session_id="default",
+                    channel="feishu",
+                    user_id="default",
+                    data_dir=f"/tmp/heimaclaw_memory_{self.agent_id}",
                 )
 
             # 初始化事件总线
