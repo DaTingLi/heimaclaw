@@ -428,3 +428,26 @@ LongTermMemory（长期记忆）
 ---
 
 _严格遵循数据流：实现→测试→风格→提交→推送→记录_ ✨
+
+### CI修复记录（2026-03-19 08:28）
+
+#### 问题
+- CI失败：commit 010b60e
+- 原因：pytest使用--cov参数但未安装pytest-cov
+
+#### 修复
+- 修改`.github/workflows/ci.yml`
+- 添加`pip install pytest-cov`
+
+#### 验证
+- 本地CI模拟：✅ 全部通过
+  - pytest: 48 passed, 1 skipped
+  - ruff: All checks passed
+  - black: 通过
+
+#### Git提交
+- **Commit 9**: `fdc3b38` - fix(ci): 添加pytest-cov依赖
+  - ✅ 已推送到GitHub
+
+---
+
