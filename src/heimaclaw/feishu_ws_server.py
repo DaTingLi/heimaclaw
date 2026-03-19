@@ -197,6 +197,12 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             content=content,
         )
 
+        # 确保 response_text 是字符串
+        if hasattr(response_text, 'content'):
+            response_text = response_text.content
+        elif not isinstance(response_text, str):
+            response_text = str(response_text)
+
         # 发送回复（使用飞书卡片格式）
         from heimaclaw.channel.base import OutboundMessage
         from heimaclaw.feishu.formatter import format_feishu_card
