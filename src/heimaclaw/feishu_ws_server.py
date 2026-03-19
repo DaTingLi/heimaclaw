@@ -197,8 +197,8 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             content=content,
         )
 
-        # 确保 response_text 是字符串
-        if hasattr(response_text, 'content'):
+        # 确保 response_text 是字符串（提取 LLMResponse 的 content）
+        if hasattr(response_text, 'content') and response_text.content:
             response_text = response_text.content
         elif not isinstance(response_text, str):
             response_text = str(response_text)
