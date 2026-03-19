@@ -140,9 +140,20 @@ async def handle_feishu_message(message: InboundMessage) -> None:
 
         # ========== 路由逻辑 ==========
 
-        # 群聊不 @Bot → 忽略
+        # 群聊不 @Bot → 发送确认消息后忽略
         if is_group and not is_mentioned:
-            info("群聊消息未 @Bot，忽略")
+            # 发送"正在输入"确认（类似 openclaw 的 typing indicator）
+            from heimaclaw.channel.base import OutboundMessage
+            from heimaclaw.feishu.formatter import format_feishu_card
+            ack_card = format_feishu_card("💬 收到消息，请在消息前加 @HeiMaClaw 以唤醒助手", agent_name="HeiMaClaw")
+            ack_outbound = OutboundMessage(
+                chat_id=chat_id,
+                content=ack_card,
+                message_type="interactive",
+            )
+            if _adapter:
+                await _adapter.send_message(ack_outbound)
+            info(f"群聊未 @Bot，已发送提示消息")
             return
 
         # 确定 Agent 名称
