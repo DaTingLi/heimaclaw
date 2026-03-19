@@ -1,45 +1,69 @@
 """
 配置加载器模块
 
-负责从文件系统加载配置并进行验证。
+支持多账号飞书配置：
+[channels.feishu]
+enabled = true
+default = "pm1"
+
+[channels.feishu.accounts.pm1]
+app_id = "xxx"
+app_secret = "yyy"
+name = "产品经理1号"
+enabled = true
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import tomli
+import tomli_w
 from pydantic import BaseModel, Field
 
 from heimaclaw.console import warning
 
-
-class ServerConfig(BaseModel):
-    """服务器配置"""
-
-    host: str = Field(default="0.0.0.0", description="监听地址")
-    port: int = Field(default=8000, description="监听端口")
-    workers: int = Field(default=1, description="工作进程数")
+# ==================== 飞书多账号配置 ====================
 
 
-class SandboxConfig(BaseModel):
-    """沙箱配置"""
+class FeishuAccountConfig(BaseModel):
+    """单个飞书账号配置"""
 
-    enabled: bool = Field(default=True, description="是否启用沙箱")
-    backend: str = Field(default="firecracker", description="沙箱后端")
-    warm_pool_size: int = Field(default=5, description="预热池大小")
-    max_instances: int = Field(default=100, description="最大实例数")
-    memory_mb: int = Field(default=128, description="单个实例内存")
-    cpu_count: int = Field(default=1, description="单个实例 CPU 核心数")
+    app_id: str = Field(default="", description="App ID")
+    app_secret: str = Field(default="", description="App Secret")
+    name: str = Field(default="", description="账号名称")
+    enabled: bool = Field(default=False, description="是否启用")
+    encrypt_key: str = Field(default="", description="加密 Key")
+    verification_token: str = Field(default="", description="验证 Token")
 
 
 class FeishuChannelConfig(BaseModel):
-    """飞书渠道配置"""
+    """飞书渠道配置（多账号）"""
 
     enabled: bool = Field(default=False, description="是否启用")
-    app_id: str = Field(default="", description="App ID")
-    app_secret: str = Field(default="", description="App Secret")
-    encrypt_key: str = Field(default="", description="加密 Key")
-    verification_token: str = Field(default="", description="验证 Token")
+    default: str = Field(default="", description="默认账号名称")
+    accounts: dict[str, FeishuAccountConfig] = Field(default_factory=dict)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def get_default_account(self) -> Optional[FeishuAccountConfig]:
+        """获取默认账号"""
+        if not self.default and self.accounts:
+            self.default = next(iter(self.accounts))
+        if self.default and self.default in self.accounts:
+            return self.accounts[self.default]
+        return None
+
+    def get_account(self, name: str) -> Optional[FeishuAccountConfig]:
+        """获取指定账号"""
+        return self.accounts.get(name)
+
+    def list_enabled_accounts(self) -> list[str]:
+        """列出所有已启用的账号"""
+        return [name for name, acc in self.accounts.items() if acc.enabled]
+
+
+# ==================== 其他配置类 ====================
 
 
 class WecomChannelConfig(BaseModel):
@@ -58,6 +82,28 @@ class ChannelsConfig(BaseModel):
 
     feishu: FeishuChannelConfig = Field(default_factory=FeishuChannelConfig)
     wecom: WecomChannelConfig = Field(default_factory=WecomChannelConfig)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class ServerConfig(BaseModel):
+    """服务器配置"""
+
+    host: str = Field(default="0.0.0.0", description="监听地址")
+    port: int = Field(default=8000, description="监听端口")
+    workers: int = Field(default=1, description="工作进程数")
+
+
+class SandboxConfig(BaseModel):
+    """沙箱配置"""
+
+    enabled: bool = Field(default=True, description="是否启用沙箱")
+    backend: str = Field(default="firecracker", description="沙箱后端")
+    warm_pool_size: int = Field(default=5, description="预热池大小")
+    max_instances: int = Field(default=100, description="最大实例数")
+    memory_mb: int = Field(default=128, description="内存 MB")
+    cpu_count: int = Field(default=1, description="CPU 核数")
 
 
 class LoggingConfig(BaseModel):
@@ -86,17 +132,15 @@ class Config(BaseModel):
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
+    class Config:
+        arbitrary_types_allowed = True
 
-# 全局配置实例
-_config: Optional[Config] = None
+
+# ==================== 配置加载器 ====================
 
 
 class ConfigLoader:
-    """
-    配置加载器
-
-    负责从文件系统加载配置，支持多路径查找。
-    """
+    """配置加载器"""
 
     DEFAULT_PATHS = [
         Path("/opt/heimaclaw/config/config.toml"),
@@ -105,46 +149,32 @@ class ConfigLoader:
     ]
 
     def __init__(self, config_path: Optional[Path] = None):
-        """
-        初始化配置加载器
-
-        参数:
-            config_path: 指定配置文件路径，为 None 则自动查找
-        """
         self.config_path = config_path
-        self._config: Optional[Config] = None
 
     def load(self) -> Config:
-        """
-        加载配置
+        """加载配置"""
+        # 查找配置文件
+        config_file = self._find_config_file()
 
-        返回:
-            配置对象
-        """
-        if self._config is not None:
-            return self._config
+        if not config_file or not config_file.exists():
+            warning("配置文件不存在，使用默认配置")
+            return Config()
 
-        # 确定配置文件路径
-        path = self._find_config_path()
+        # 解析配置
+        try:
+            with open(config_file, "rb") as f:
+                raw_config = tomli.load(f)
+        except Exception as e:
+            warning(f"配置文件解析失败: {e}，使用默认配置")
+            return Config()
 
-        if path is None:
-            warning("未找到配置文件，使用默认配置")
-            self._config = Config()
-            return self._config
+        # 转换为嵌套对象
+        return self._parse_config(raw_config)
 
-        # 读取并解析配置
-        with open(path, "rb") as f:
-            data = tomli.load(f)
-
-        self._config = Config(**data)
-        return self._config
-
-    def _find_config_path(self) -> Optional[Path]:
-        """查找配置文件路径"""
-        if self.config_path is not None:
-            if self.config_path.exists():
-                return self.config_path
-            return None
+    def _find_config_file(self) -> Optional[Path]:
+        """查找配置文件"""
+        if self.config_path:
+            return self.config_path
 
         for path in self.DEFAULT_PATHS:
             if path.exists():
@@ -152,38 +182,83 @@ class ConfigLoader:
 
         return None
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """
-        获取配置项
+    def _parse_config(self, raw: dict) -> Config:
+        """解析配置字典"""
+        # 解析飞书多账号配置
+        feishu_raw = raw.get("channels", {}).get("feishu", {})
+        accounts_raw = feishu_raw.get("accounts", {})
 
-        参数:
-            key: 配置键，支持点分隔，如 "server.port"
-            default: 默认值
+        feishu_accounts = {}
+        for name, acc_data in accounts_raw.items():
+            if isinstance(acc_data, dict):
+                feishu_accounts[name] = FeishuAccountConfig(**acc_data)
 
-        返回:
-            配置值
-        """
-        config = self.load()
+        feishu_config = FeishuChannelConfig(
+            enabled=feishu_raw.get("enabled", False),
+            default=feishu_raw.get("default", ""),
+            accounts=feishu_accounts,
+        )
 
-        keys = key.split(".")
-        value: Any = config.model_dump()
+        # 解析其他渠道
+        wecom_raw = raw.get("channels", {}).get("wecom", {})
+        wecom_config = WecomChannelConfig(**wecom_raw)
 
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
-            else:
-                return default
+        channels_config = ChannelsConfig(
+            feishu=feishu_config,
+            wecom=wecom_config,
+        )
 
-        return value
+        # 构建完整配置
+        return Config(
+            heimaclaw=AppConfig(**raw.get("heimaclaw", {})),
+            server=ServerConfig(**raw.get("server", {})),
+            sandbox=SandboxConfig(**raw.get("sandbox", {})),
+            channels=channels_config,
+            logging=LoggingConfig(**raw.get("logging", {})),
+        )
+
+    def save(self, config: Config, path: Optional[Path] = None) -> None:
+        """保存配置"""
+        config_file = path or self.config_path or self.DEFAULT_PATHS[0]
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+
+        raw = self._serialize_config(config)
+
+        with open(config_file, "wb") as f:
+            tomli_w.dump(raw, f)
+
+    def _serialize_config(self, config: Config) -> dict:
+        """序列化配置为字典"""
+        result = {
+            "heimaclaw": config.heimaclaw.model_dump(),
+            "server": config.server.model_dump(),
+            "sandbox": config.sandbox.model_dump(),
+            "logging": config.logging.model_dump(),
+            "channels": {
+                "feishu": {
+                    "enabled": config.channels.feishu.enabled,
+                    "default": config.channels.feishu.default,
+                    "accounts": {},
+                },
+                "wecom": config.channels.wecom.model_dump(),
+            },
+        }
+
+        # 序列化飞书账号
+        for name, acc in config.channels.feishu.accounts.items():
+            result["channels"]["feishu"]["accounts"][name] = acc.model_dump()
+
+        return result
+
+
+# ==================== 全局配置 ====================
+
+
+_config: Optional[Config] = None
 
 
 def get_config() -> Config:
-    """
-    获取全局配置实例
-
-    返回:
-        配置对象
-    """
+    """获取全局配置实例"""
     global _config
 
     if _config is None:
@@ -194,18 +269,15 @@ def get_config() -> Config:
 
 
 def reload_config() -> Config:
-    """
-    重新加载配置
-
-    返回:
-        新的配置对象
-    """
+    """重新加载配置"""
     global _config
     _config = None
     return get_config()
 
 
-# 热重载集成
+# ==================== 热重载集成 ====================
+
+
 _watcher_started = False
 
 
