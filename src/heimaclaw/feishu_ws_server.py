@@ -178,6 +178,7 @@ async def main() -> None:
     feishu_config = {}
     if hasattr(config, "channels") and hasattr(config.channels, "feishu"):
         feishu = config.channels.feishu
+
         # 支持新的多账号结构和旧的直接配置
         if hasattr(feishu, "accounts") and feishu.accounts:
             # 新结构：优先使用默认账号
@@ -196,7 +197,8 @@ async def main() -> None:
 
     if not feishu_config.get("app_id"):
         error(
-            "飞书未配置，请先运行: heimaclaw config set channels.feishu...accounts...default...app_id <APP_ID>"
+            "飞书未配置，请先运行: "
+            "heimaclaw config set channels.feishu.accounts.default.app_id <APP_ID>"
         )
         return
 
