@@ -204,6 +204,7 @@ def reload_config() -> Config:
     _config = None
     return get_config()
 
+
 # 热重载集成
 _watcher_started = False
 
