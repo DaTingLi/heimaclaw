@@ -146,6 +146,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             # 发送"正在输入"确认（类似 openclaw 的 typing indicator）
             from heimaclaw.channel.base import OutboundMessage
             from heimaclaw.feishu.formatter import format_feishu_card
+
             ack_text = "💬 收到消息，请在消息前加 @HeiMaClaw 以唤醒助手"
             ack_card = format_feishu_card(ack_text, agent_name="HeiMaClaw")
             ack_outbound = OutboundMessage(
