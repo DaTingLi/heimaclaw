@@ -251,7 +251,7 @@ class ReActEngine:
                         args = {}
 
                 result: ToolResult = await self.tool_registry.execute(
-                    tool_name=name,
+                    name=name,
                     parameters=args,
                 )
 
