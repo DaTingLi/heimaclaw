@@ -403,11 +403,18 @@ class AgentRunner:
                         history = [summary] + history
 
         # 使用 ReAct 引擎执行
-        if self._react_engine:
+        if self._react_engine and self._llm_adapter:
             try:
+                # 获取用户消息（最后一条用户消息）
+                user_message = ""
+                for msg in reversed(history):
+                    if msg.get("role") == "user":
+                        user_message = msg.get("content", "")
+                        break
+
                 result: ExecutionResult = await self._react_engine.execute(
-                    user_message=history[-1].get("content", "") if history else "",
-                    context=history[:-1],  # 排除最后一条用户消息
+                    user_message=user_message,
+                    context=history,  # 包含完整上下文
                 )
 
                 # 记录执行步骤
