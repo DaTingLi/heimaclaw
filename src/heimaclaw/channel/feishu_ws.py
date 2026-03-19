@@ -213,26 +213,35 @@ class FeishuWebSocketAdapter(ChannelAdapter):
         """
         发送飞书消息
 
-        参数:
-            message: 出站消息
-
-        返回:
-            是否发送成功
+        支持 text 和 interactive (卡片) 两种类型
         """
         try:
-            # 判断是群聊还是私聊
             chat_id = message.chat_id
             is_group = chat_id.startswith("oc_")
+            receive_type = "chat_id" if is_group else "open_id"
+
+            # 根据消息类型选择格式
+            if message.message_type == "interactive":
+                # 卡片消息
+                msg_type = "interactive"
+                content = json.dumps(message.content)
+            else:
+                # 文本消息
+                msg_type = "text"
+                if isinstance(message.content, dict):
+                    content = json.dumps(message.content)
+                else:
+                    content = json.dumps({"text": str(message.content)})
 
             # 创建消息请求
             request = (
                 CreateMessageRequest.builder()
-                .receive_id_type("chat_id" if is_group else "open_id")
+                .receive_id_type(receive_type)
                 .request_body(
                     CreateMessageRequestBody.builder()
                     .receive_id(chat_id)
-                    .msg_type("text")
-                    .content(json.dumps({"text": message.content}))
+                    .msg_type(msg_type)
+                    .content(content)
                     .build()
                 )
                 .build()

@@ -136,14 +136,17 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             content=content,
         )
 
-        # 发送回复
+        # 发送回复（使用飞书卡片格式）
         from heimaclaw.channel.base import OutboundMessage
+        from heimaclaw.feishu.formatter import format_feishu_card
 
         # 群聊：发送到群（chat_id）
         # 私聊：发送给用户（chat_id = user_id）
+        card_content = format_feishu_card(response_text, agent_name=agent_name)
         outbound = OutboundMessage(
             chat_id=chat_id if is_group else user_id,
-            content=response_text,
+            content=card_content,
+            message_type="interactive",
         )
 
         if _adapter:
