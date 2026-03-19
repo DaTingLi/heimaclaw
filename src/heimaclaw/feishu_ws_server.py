@@ -198,17 +198,14 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         )
 
         # 确保 response_text 是字符串（提取 LLMResponse 的 content）
-        debug(f"[DEBUG] 处理前 response_text 类型: {type(response_text)}")
         if hasattr(response_text, 'content'):
             extracted = getattr(response_text, 'content', None)
-            debug(f"[DEBUG] extracted = {repr(extracted)}")
             if extracted is not None:
                 response_text = extracted
             else:
                 response_text = str(response_text)
         elif not isinstance(response_text, str):
             response_text = str(response_text)
-        debug(f"[DEBUG] 处理后 response_text 类型: {type(response_text)}, 值: {str(response_text)[:50]}")
 
         # 发送回复（使用飞书卡片格式）
         from heimaclaw.channel.base import OutboundMessage
