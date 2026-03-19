@@ -2,49 +2,56 @@
 飞书消息格式化模块
 将 LLM 响应转换为飞书 Interactive Card 格式
 """
+
+import json
 import re
 
 
 def format_feishu_card(
     content: str,
     agent_name: str = "HeiMaClaw",
-) -> dict:
+) -> str:
     """
-    将文本内容转换为飞书 Interactive Card 格式
+    将文本内容转换为飞书 Interactive Card 格式的 JSON 字符串
     """
     elements = []
-    lines = content.split("\n")
 
+    lines = content.split("\n")
     for line in lines:
         line = line.rstrip()
 
+        # 空行
         if not line.strip():
-            elements.append({"tag": "hr"})
             continue
 
+        # 转换 Markdown
         formatted = _format_markdown(line)
         elements.append({"tag": "markdown", "content": formatted})
 
+    # 如果没有元素，添加空文本
+    if not elements:
+        elements.append({"tag": "markdown", "content": " "})
+
+    # 构建卡片（符合飞书规范）
     card = {
-        "msg_type": "interactive",
-        "card": {
-            "header": {
-                "title": {
-                    "tag": "plain_text",
-                    "content": f"🤖 {agent_name}",
-                },
-                "template": "blue",
-            },
-            "elements": elements,
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": f"🤖 {agent_name}"},
+            "template": "blue",
         },
+        "elements": elements,
     }
 
-    return card
+    return json.dumps(card)
 
 
 def _format_markdown(text: str) -> str:
     """Markdown -> 飞书 Markdown"""
-    # 粗体 **text**
+    # 代码块不转换
+    if "```" in text:
+        return text
+
+    # 粗体
     text = re.sub(r"\*\*(.+?)\*\*", r"**\1**", text)
     # 斜体
     text = re.sub(r"\*(.+?)\*", r"*\1*", text)
@@ -53,9 +60,10 @@ def _format_markdown(text: str) -> str:
     text = re.sub(r"`(.+?)`", r"`\1`", text)
     # 链接
     text = re.sub(r"\[(.+?)\]\((.+?)\)", r"[\1](\2)", text)
+
     return text
 
 
-def format_simple_text(content: str) -> dict:
+def format_simple_text(content: str) -> str:
     """简单文本消息"""
-    return {"msg_type": "text", "content": content}
+    return json.dumps({"text": content})

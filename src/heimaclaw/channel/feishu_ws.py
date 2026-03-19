@@ -222,16 +222,16 @@ class FeishuWebSocketAdapter(ChannelAdapter):
 
             # 根据消息类型选择格式
             if message.message_type == "interactive":
-                # 卡片消息
+                # 卡片消息：content 已经是 JSON 字符串
                 msg_type = "interactive"
-                content = json.dumps(message.content)
+                content = message.content if isinstance(message.content, str) else json.dumps(message.content)
             else:
                 # 文本消息
                 msg_type = "text"
-                if isinstance(message.content, dict):
-                    content = json.dumps(message.content)
+                if isinstance(message.content, str):
+                    content = json.dumps({"text": message.content})
                 else:
-                    content = json.dumps({"text": str(message.content)})
+                    content = json.dumps(message.content)
 
             # 创建消息请求
             request = (

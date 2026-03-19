@@ -68,4 +68,4 @@ jobs:
     - name: Run Black
       shell: bash -l {0}
       run: |
-        black --check src/ tests/
+        black --target-version py310 --check src/ tests/
