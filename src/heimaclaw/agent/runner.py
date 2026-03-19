@@ -282,6 +282,12 @@ class AgentRunner:
             # 执行处理循环
             response = await self._execute_loop(session)
 
+            # 确保响应是字符串（提取 LLMResponse.content）
+            if hasattr(response, 'content'):
+                response = response.content
+            elif not isinstance(response, str):
+                response = str(response)
+
             # 添加助手消息到会话管理器
             await self.session_manager.add_message(
                 session_id=session.session_id,
