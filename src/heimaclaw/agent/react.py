@@ -129,9 +129,13 @@ class ReActEngine:
                 for i, tool_result in enumerate(tool_results):
                     tool_text = str(tool_result)
                     tool_result_summary += f"\n{tool_text}"
+                    # 获取 tool_call_id
+                    tool_call_id = tool_calls[i].get("id", f"tool_{i}")
                     messages.append({
                         "role": "tool",
                         "content": tool_text,
+                        "tool_call_id": tool_call_id,
+                        "name": tool_calls[i].get("function", {}).get("name", ""),
                     })
                     result.steps.append(Step(
                         type=StepType.OBSERVATION,
