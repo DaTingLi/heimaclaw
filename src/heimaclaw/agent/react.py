@@ -9,6 +9,7 @@ ReAct 推理引擎
 3. Observation: 观察结果
 4. 循环直到完成
 """
+
 import asyncio
 import json
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ from heimaclaw.agent.tools import ToolRegistry, ToolResult
 
 class StepType(str, Enum):
     """步骤类型"""
+
     THOUGHT = "thought"
     ACTION = "action"
     OBSERVATION = "observation"
@@ -30,6 +32,7 @@ class StepType(str, Enum):
 @dataclass
 class Step:
     """执行步骤"""
+
     type: StepType
     content: str
     tool_name: Optional[str] = None
@@ -41,6 +44,7 @@ class Step:
 @dataclass
 class ExecutionResult:
     """执行结果"""
+
     steps: list[Step] = field(default_factory=list)
     final_response: str = ""
     success: bool = True
@@ -136,26 +140,32 @@ class ReActEngine:
             if not tool_calls:
                 has_tool_calls = False
                 result.final_response = response.get("content", "")
-                result.steps.append(Step(
-                    type=StepType.RESPONSE,
-                    content=response.get("content", ""),
-                ))
+                result.steps.append(
+                    Step(
+                        type=StepType.RESPONSE,
+                        content=response.get("content", ""),
+                    )
+                )
             else:
                 # 内层循环：执行工具
                 tool_results = await self._execute_tools(tool_calls, messages)
 
                 # 处理工具结果
                 for tool_result in tool_results:
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_result,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "content": tool_result,
+                        }
+                    )
 
-                    result.steps.append(Step(
-                        type=StepType.OBSERVATION,
-                        content=tool_result,
-                        success=tool_result.get("success", True),
-                    ))
+                    result.steps.append(
+                        Step(
+                            type=StepType.OBSERVATION,
+                            content=tool_result,
+                            success=tool_result.get("success", True),
+                        )
+                    )
 
         if iteration >= self.MAX_ITERATIONS:
             result.error = f"达到最大迭代次数 ({self.MAX_ITERATIONS})"
@@ -231,8 +241,7 @@ class ReActEngine:
 
         # 并行执行
         results = await asyncio.gather(
-            *[task for _, task in tasks],
-            return_exceptions=True
+            *[task for _, task in tasks], return_exceptions=True
         )
 
         # 处理结果

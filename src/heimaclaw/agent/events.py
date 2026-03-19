@@ -6,6 +6,7 @@ Agent 事件流系统
 - 支持流式输出
 - 类型安全的事件
 """
+
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,6 +16,7 @@ from typing import Any, Callable, Optional
 
 class EventType(str, Enum):
     """事件类型"""
+
     AGENT_START = "agent_start"
     TURN_START = "turn_start"
     MESSAGE_START = "message_start"
@@ -32,6 +34,7 @@ class EventType(str, Enum):
 @dataclass
 class AgentEvent:
     """Agent 事件"""
+
     type: EventType
     data: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
