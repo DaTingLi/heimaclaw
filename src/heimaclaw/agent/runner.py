@@ -205,7 +205,7 @@ class AgentRunner:
             self._event_bus = EventBus(base_dir=f"/tmp/heimaclaw_events_{self.agent_id}")
 
             # 初始化子 Agent 派生器
-            self._subagent_registry = SubagentRegistry(base_dir=f"/tmp/heimaclaw_subagent_{self.agent_id}")
+            self._subagent_registry = SubagentRegistry(state_dir=f"/tmp/heimaclaw_subagent_{self.agent_id}")
             self._subagent_spawner = SubagentSpawner(
                 event_bus=self._event_bus,
                 registry=self._subagent_registry,
