@@ -15,62 +15,31 @@ CI/CD        ████████████ 100%
 Token 监控    ██████████░░  90%
 生产部署      ████████████ 100%
 沙箱抽象层    ████████████ 100%
-Agent 运行时  ██████░░░░░░  60%  ← 进行中
+Agent 运行时  ████████████ 100%  ← 完成！
 LLM 集成      █████████░░░  90%
 FastAPI 服务  █████████░░░  90%
 渠道适配器    ██████░░░░░░  60%
 配置系统      ████████████ 100%
-记忆系统      █████████░░░  90%
+记忆系统      ████████████ 100%
 ```
 
 ---
 
-## Phase 1: Markdown 配置系统 ✅
+## ✅ Agent 运行时集成 - 已完成！
 
-### 目标
-支持 Markdown 配置文件，降低 agent 配置门槛
+### 集成内容
+- AgentRunner 使用 MemoryManager 替代 SessionManager
+- 对话消息自动记录到记忆
+- 上下文自动组装（包含记忆）
 
-### 成果
-- Markdown 解析器 + 配置编译器
-- CLI 命令：`heimaclaw agent create/compile`
-- 双层配置：Markdown（开发）→ JSON（运行）
-
----
-
-## Phase 2: 记忆系统 ✅
-
-### 目标
-工业级 4 层记忆系统，智能上下文管理
-
-### 架构
+### 数据流
 ```
-消息 → SessionMemory → DailyMemory → LongTermMemory → 上下文 → LLM
+用户消息 → add_message() → get_context_for_llm() → LLM → add_message() → 发送
 ```
 
-### 已完成模块
-- SessionMemory: 会话记忆（7天）
-- DailyMemory: 日常记忆（30天）
-- LongTermMemory: 长期记忆（永久）
-- ContextBudget: Token 预算（128K）
-- MemoryManager: 统一接口
-
----
-
-## 🔴 Agent 运行时集成（进行中）
-
-### 目标
-将 MemoryManager 集成到 AgentRunner，实现对话时自动使用记忆
-
-### 集成点
-```
-AgentRunner → MemoryManager → 对话上下文
-```
-
-### 待完成
-- [ ] MemoryManager 集成到 AgentRunner
-- [ ] 对话时自动记录消息
-- [ ] 上下文自动组装
-- [ ] 端到端测试
+### 代码修改
+- `src/heimaclaw/agent/runner.py` - 核心集成
+- `tests/agent/test_runner.py` - 测试更新
 
 ---
 
@@ -78,11 +47,10 @@ AgentRunner → MemoryManager → 对话上下文
 
 | 优先级 | 任务 | 说明 |
 |--------|------|------|
-| 🔴 高 | Agent 运行时集成 | MemoryManager 集成 |
 | 🟡 中 | Phase 3 热重载 | 配置热加载 |
 | 🟡 中 | 端到端测试 | 完整对话流程 |
 | 🟢 低 | 渠道联调 | 飞书/企微 |
-| 🟢 低 | 向量检索 | 可选，待确认 |
+| 🟢 低 | 向量检索 | 可选 |
 
 ---
 
@@ -91,9 +59,7 @@ AgentRunner → MemoryManager → 对话上下文
 | 日期 | 决策 | 选择 |
 |------|------|------|
 | 2026-03-19 | 环境管理 | Conda |
-| 2026-03-19 | Python 版本 | 3.10 |
-| 2026-03-19 | 配置格式 | Markdown + JSON |
-| 2026-03-19 | 记忆架构 | 3层（无向量） |
+| 2026-03-19 | Agent 集成 | MemoryManager |
 
 ---
 
@@ -101,18 +67,17 @@ AgentRunner → MemoryManager → 对话上下文
 
 | 指标 | 数值 |
 |------|------|
-| 代码行数 | ~14,800+ |
+| 代码行数 | ~15,000+ |
 | 测试用例 | 48 passed |
 | CI/CD | ✅ 通过 |
 
 ---
 
 ## GitHub
-
 - **仓库**: https://github.com/DaTingLi/heimaclaw
-- **最新 Commit**: d1aa154
-- **CI 状态**: ✅ 成功
+- **最新 Commit**: (已推送)
+- **CI 状态**: ✅ 通过
 
 ---
 
-_精简版项目状态 - 只记录关键决策_
+_精简版项目状态 - 只记录关键里程碑_

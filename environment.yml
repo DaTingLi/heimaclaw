@@ -13,3 +13,4 @@ dependencies:
     - ruff>=0.1
     - black>=23.0
     - mypy>=1.0
+    - watchdog>=3.0
