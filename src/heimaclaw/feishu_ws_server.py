@@ -199,13 +199,18 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             except Exception as e:
                 info(f"[Typing] 添加 Typing Indicator 失败: {e}")
 
+        # 私聊：直接使用 user_id 作为 session_id，保持会话连续
+        session_id = user_id if not is_group else None
+
         # 处理消息（私聊保持会话，群聊不保持）
         response_text = await runner.process_message(
             user_id=user_id,
             channel=ChannelType.FEISHU,
             is_group=is_group,
             content=content,
+            session_id=session_id,
         )
+
 
         # 确保 response_text 是字符串（提取 LLMResponse 的 content）
         if hasattr(response_text, 'content'):
