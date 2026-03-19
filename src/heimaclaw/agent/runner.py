@@ -151,6 +151,11 @@ class AgentRunner:
         # ReAct 推理引擎
         self._react_engine: Optional[ReActEngine] = None
 
+        # 上下文模式: "full"=完整历史, "compact"=摘要历史, "minimal"=仅当前
+        self._context_mode = (
+            config.context_mode if hasattr(config, "context_mode") else "minimal"
+        )
+
     @property
     def status(self) -> AgentStatus:
         """获取 Agent 状态"""
@@ -368,14 +373,20 @@ class AgentRunner:
         # 构建消息历史
         history = self._build_message_history(messages)
 
-        # 注入记忆上下文（如果有）
-        if self._memory_manager:
+        # 注入记忆上下文（根据上下文模式）
+        if self._memory_manager and self._context_mode != "minimal":
             self._memory_manager.session_id = session.session_id
             self._memory_manager.user_id = session.user_id
 
             memory_context = self._memory_manager.get_context_for_llm()
             if memory_context:
-                history = memory_context + history
+                if self._context_mode == "full":
+                    history = memory_context + history
+                elif self._context_mode == "compact":
+                    # 只注入摘要，不注入完整历史
+                    summary = memory_context[0] if memory_context else None
+                    if summary:
+                        history = [summary] + history
 
         # 使用 ReAct 引擎执行
         if self._react_engine:

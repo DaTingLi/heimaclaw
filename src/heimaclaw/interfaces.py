@@ -59,6 +59,10 @@ class AgentConfig(BaseModel):
     sandbox_enabled: bool = Field(default=True, description="是否启用沙箱")
     sandbox_memory_mb: int = Field(default=128, description="沙箱内存")
     sandbox_cpu_count: int = Field(default=1, description="沙箱 CPU 核心数")
+    context_mode: str = Field(
+        default="minimal",
+        description="上下文模式: full=完整历史, compact=摘要, minimal=仅当前",
+    )
 
 
 class SessionContext(BaseModel):
