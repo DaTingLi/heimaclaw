@@ -240,6 +240,9 @@ class AgentRunner:
         if self._status != AgentStatus.RUNNING:
             raise RuntimeError(f"Agent 状态异常: {self._status}")
 
+        # 判断是否是群聊（群聊不保持会话历史）
+        is_group_chat = channel == ChannelType.FEISHU_GROUP
+
         # 获取或创建会话
         if session_id:
             session = await self.session_manager.get(session_id)
@@ -252,6 +255,9 @@ class AgentRunner:
                 user_id=user_id,
             )
             self._active_sessions[session.session_id] = session
+
+        # 标记是否加载历史
+        session.metadata["load_history"] = not is_group_chat
 
         # 添加用户消息到会话管理器
         await self.session_manager.add_message(
@@ -367,8 +373,12 @@ class AgentRunner:
         返回:
             最终响应
         """
-        # 获取会话历史
+        # 获取会话历史（群聊模式不加载历史）
         messages = await self.session_manager.get_messages(session.session_id)
+        if not session.metadata.get("load_history", True):
+            # 群聊模式：只保留最新消息（当前用户消息）
+            if messages:
+                messages = [messages[-1]]
 
         # 构建消息历史
         history = self._build_message_history(messages)
