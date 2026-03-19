@@ -187,19 +187,7 @@ async def handle_feishu_message(message: InboundMessage) -> None:
                 error("默认 Agent 也不存在")
                 return
 
-        # 发送 typing 状态（正在输入）
-        from heimaclaw.channel.base import OutboundMessage
-        from heimaclaw.feishu.formatter import format_feishu_card
-        typing_card = format_feishu_card("🤔 正在思考...", agent_name=agent_name)
-        typing_outbound = OutboundMessage(
-            chat_id=chat_id if is_group else user_id,
-            content=typing_card,
-            message_type="interactive",
-        )
-        typing_msg_id = None
-        if _adapter:
-            # 先发送一个 typing 消息作为确认
-            await _adapter.send_message(typing_outbound)
+        info(f"开始处理消息: session={session_id}, user={user_id}")
 
         # 处理消息（私聊保持会话，群聊不保持）
         response_text = await runner.process_message(

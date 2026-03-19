@@ -199,6 +199,7 @@ class ReActEngine:
 
             response = await self.llm(
                 messages=llm_messages,
+                system_prompt=prompt if prompt else None,
             )
 
             # 解析响应
