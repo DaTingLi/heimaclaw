@@ -1952,3 +1952,50 @@ def pid_command() -> None:
     for pid in pids:
         if pid.isdigit():
             console.print(f"  PID: {pid}")
+
+
+@app.command("log")
+def log_command(
+    lines: int = typer.Option(50, "--lines", "-n", help="显示最近 N 行日志"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="实时跟踪日志"),
+) -> None:
+    """
+    查看 HeiMaClaw 服务日志
+
+    示例:
+        heimaclaw log              # 查看最近 50 行
+        heimaclaw log -n 100      # 查看最近 100 行
+        heimaclaw log -f          # 实时跟踪日志
+    """
+    import subprocess
+
+    # 查找日志文件
+    log_paths = [
+        Path("/tmp/heimaclaw.log"),
+        Path.home() / ".heimaclaw" / "logs" / "heimaclaw.log",
+        Path("/opt/heimaclaw/logs/heimaclaw.log"),
+    ]
+
+    log_file = None
+    for path in log_paths:
+        if path.exists():
+            log_file = path
+            break
+
+    if not log_file:
+        info("未找到日志文件")
+        info("日志可能写入 stdout/stderr，请使用 'heimaclaw log -f' 实时查看")
+        return
+
+    title(f"HeiMaClaw 日志: {log_file}")
+
+    if follow:
+        # 实时跟踪
+        subprocess.run(["tail", "-n", str(lines), "-f", str(log_file)])
+    else:
+        # 显示最近 N 行
+        result = subprocess.run(["tail", "-n", str(lines), str(log_file)], capture_output=True, text=True)
+        if result.stdout:
+            console.print(result.stdout)
+        if result.stderr:
+            error(result.stderr)
