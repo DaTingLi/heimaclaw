@@ -9,14 +9,20 @@
 
 Token 预算管理：
 - ContextBudget - Token 预算分配
+
+统一接口：
+- MemoryManager - 记忆管理器（推荐使用）
 """
 
 from heimaclaw.memory.budget import ContextBudget, TokenBudget, count_tokens
 from heimaclaw.memory.daily import DailyMemory
 from heimaclaw.memory.longterm import LongTermMemory
+from heimaclaw.memory.manager import MemoryManager
 from heimaclaw.memory.session import Message, Session, SessionMemory
 
 __all__ = [
+    # 统一接口
+    "MemoryManager",
     # 会话记忆
     "SessionMemory",
     "Session",
