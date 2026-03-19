@@ -195,23 +195,37 @@ def start_command(
     port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
     workers: int = typer.Option(1, "--workers", "-w", help="工作进程数"),
     reload: bool = typer.Option(False, "--reload", help="开发模式自动重载"),
+    feishu: bool = typer.Option(True, "--feishu/--no-feishu", help="启动飞书服务"),
+    http: bool = typer.Option(True, "--http/--no-http", help="启动 HTTP API 服务"),
 ) -> None:
     """
     启动 HeiMaClaw 服务
 
-    启动 FastAPI 服务，监听飞书和企业微信的 webhook 回调。
+    启动 HTTP API 服务和可选的飞书长连接服务。
+    默认同时启动 HTTP API (端口 8000) 和飞书长连接。
+
+    示例:
+        heimaclaw start                    # 启动全部服务
+        heimaclaw start --feishu         # 只启动飞书服务
+        heimaclaw start --http           # 只启动 HTTP 服务
+        heimaclaw start --reload         # 开发模式（代码自动重载）
     """
-    import uvicorn
+    import threading
 
     title("启动 HeiMaClaw 服务")
 
-    info(f"监听地址: {host}:{port}")
+    info(f"HTTP API: {'启用' if http else '禁用'} (端口 {port})")
+    info(f"飞书长连接: {'启用' if feishu else '禁用'}")
     info(f"工作进程: {workers}")
 
     if reload:
         warning("开发模式已启用，代码变更将自动重载")
 
-    try:
+    def run_http():
+        """启动 HTTP 服务"""
+        if not http:
+            return
+        import uvicorn
         uvicorn.run(
             "heimaclaw.server:app",
             host=host,
@@ -219,6 +233,26 @@ def start_command(
             workers=workers if not reload else 1,
             reload=reload,
         )
+
+    def run_feishu():
+        """启动飞书长连接服务"""
+        if not feishu:
+            return
+        import asyncio
+        from heimaclaw.feishu_ws_server import main as feishu_main
+        asyncio.run(feishu_main())
+
+    try:
+        if feishu and http:
+            # 同时启动两个服务
+            http_thread = threading.Thread(target=run_http, daemon=True)
+            http_thread.start()
+            run_feishu()
+        elif feishu:
+            run_feishu()
+        else:
+            run_http()
+
     except KeyboardInterrupt:
         info("服务已停止")
     except Exception as e:

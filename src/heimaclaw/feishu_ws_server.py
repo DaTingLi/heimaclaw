@@ -174,18 +174,30 @@ async def main() -> None:
     # 加载配置
     config = get_config()
 
-    # 获取飞书配置
+    # 获取飞书配置（支持多账号）
     feishu_config = {}
     if hasattr(config, "channels") and hasattr(config.channels, "feishu"):
         feishu = config.channels.feishu
-        feishu_config = {
-            "app_id": getattr(feishu, "app_id", ""),
-            "app_secret": getattr(feishu, "app_secret", ""),
-        }
+        
+        # 支持新的多账号结构和旧的直接配置
+        if hasattr(feishu, "accounts") and feishu.accounts:
+            # 新结构：优先使用默认账号
+            default_account = feishu.get_default_account()
+            if default_account:
+                feishu_config = {
+                    "app_id": default_account.app_id,
+                    "app_secret": default_account.app_secret,
+                }
+        elif hasattr(feishu, "app_id"):
+            # 旧结构：直接配置
+            feishu_config = {
+                "app_id": feishu.app_id,
+                "app_secret": feishu.app_secret,
+            }
 
     if not feishu_config.get("app_id"):
         error(
-            "飞书未配置，请先运行: heimaclaw config set channels.feishu.app_id <APP_ID>"
+            "飞书未配置，请先运行: heimaclaw config set channels.feishu.accounts.default.app_id <APP_ID>"
         )
         return
 
