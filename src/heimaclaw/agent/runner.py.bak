@@ -9,7 +9,6 @@ from typing import Any, Optional
 
 from heimaclaw.agent.session import Session, SessionManager
 from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
-from heimaclaw.memory import MemoryManager
 from heimaclaw.console import agent_event, error, info, warning
 from heimaclaw.interfaces import (
     AgentConfig,
