@@ -201,7 +201,8 @@ async def handle_feishu_message(message: InboundMessage) -> None:
             error("飞书适配器未初始化")
 
     except Exception as e:
-        error(f"处理飞书消息失败: {e}, msg_id={message.message_id if hasattr(message, "message_id") else "unknown"}")
+        msg_id = message.message_id if hasattr(message, "message_id") else "unknown"
+        error(f"处理飞书消息失败: {e}, msg_id={msg_id}")
         import traceback
 
         traceback.print_exc()
