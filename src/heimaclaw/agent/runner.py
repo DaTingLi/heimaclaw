@@ -425,6 +425,11 @@ class AgentRunner:
                     context=history,  # 包含完整上下文
                 )
 
+                # DEBUG: 检查 result 类型和 final_response
+                info(f"[DEBUG] react.execute 返回类型: {type(result)}, final_response 类型: {type(result.final_response) if hasattr(result, 'final_response') else 'N/A'}")
+                if hasattr(result, 'final_response'):
+                    info(f"[DEBUG] final_response 值: {str(result.final_response)[:100]}")
+
                 # 记录执行步骤
                 for step in result.steps:
                     if step.tool_name:
@@ -547,6 +552,9 @@ class AgentRunner:
             }
 
             info(f"LLM 响应: {response.total_tokens} tokens, {latency_ms}ms")
+
+            # DEBUG: 检查 result["content"] 的类型和值
+            info(f"[DEBUG] _call_llm result['content'] 类型: {type(result['content'])}, 值: {str(result['content'])[:80]}")
 
             return result
 
