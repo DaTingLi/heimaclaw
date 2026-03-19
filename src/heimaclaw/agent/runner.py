@@ -7,6 +7,7 @@ Agent 运行器模块
 import json
 from typing import Any, Optional
 
+from heimaclaw.agent.react import ExecutionResult, ReActEngine
 from heimaclaw.agent.session import Session, SessionManager
 from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
 from heimaclaw.console import agent_event, error, info, warning
@@ -147,6 +148,9 @@ class AgentRunner:
         # 记忆管理器
         self._memory_manager: Optional[MemoryManager] = None
 
+        # ReAct 推理引擎
+        self._react_engine: Optional[ReActEngine] = None
+
     @property
     def status(self) -> AgentStatus:
         """获取 Agent 状态"""
@@ -171,6 +175,13 @@ class AgentRunner:
 
             # 初始化 LLM
             await self._initialize_llm()
+
+            # 初始化 ReAct 推理引擎
+            if self._llm_adapter:
+                self._react_engine = ReActEngine(
+                    tool_registry=self.tool_registry,
+                    llm_callable=self._llm_adapter.chat,
+                )
 
             self._status = AgentStatus.RUNNING
             agent_event(f"Agent 已启动: {self.agent_id}")
@@ -340,7 +351,10 @@ class AgentRunner:
         """
         执行处理循环
 
-        规划 -> 执行 -> 响应
+        使用 ReAct 推理引擎，支持：
+        - 双层循环（思考 + 执行）
+        - 并行工具执行
+        - 反思机制
 
         参数:
             session: 会话对象
@@ -356,25 +370,43 @@ class AgentRunner:
 
         # 注入记忆上下文（如果有）
         if self._memory_manager:
-            # 更新 memory_manager 的 session_id 和 user_id
             self._memory_manager.session_id = session.session_id
             self._memory_manager.user_id = session.user_id
 
-            # 获取记忆上下文
             memory_context = self._memory_manager.get_context_for_llm()
-
-            # 将记忆上下文注入到消息历史开头
             if memory_context:
                 history = memory_context + history
 
-        # 调用 LLM
+        # 使用 ReAct 引擎执行
+        if self._react_engine:
+            try:
+                result: ExecutionResult = await self._react_engine.execute(
+                    user_message=history[-1].get("content", "") if history else "",
+                    context=history[:-1],  # 排除最后一条用户消息
+                )
+
+                # 记录执行步骤
+                for step in result.steps:
+                    if step.tool_name:
+                        await self.session_manager.add_message(
+                            session_id=session.session_id,
+                            role="assistant",
+                            content=step.content,
+                            tool_name=step.tool_name,
+                        )
+
+                return result.final_response
+
+            except Exception as e:
+                error(f"ReAct 执行失败: {e}")
+                # 降级到普通 LLM 调用
+
+        # 降级：使用普通 LLM 调用
         response = await self._call_llm(history)
 
-        # 检查是否需要工具调用
         tool_calls = response.get("tool_calls", [])
 
         if tool_calls:
-            # 执行工具调用
             for tool_call in tool_calls:
                 tool_name = tool_call.get("name") or tool_call.get("function", {}).get(
                     "name", ""
@@ -383,7 +415,6 @@ class AgentRunner:
                     "function", {}
                 ).get("arguments", {})
 
-                # 记录工具调用消息
                 await self.session_manager.add_message(
                     session_id=session.session_id,
                     role="assistant",
@@ -392,13 +423,11 @@ class AgentRunner:
                     tool_call_id=tool_call.get("id", ""),
                 )
 
-                # 执行工具
                 tool_result = await self._execute_tool(
                     tool_name=tool_name,
                     parameters=tool_params,
                 )
 
-                # 记录工具结果消息
                 await self.session_manager.add_message(
                     session_id=session.session_id,
                     role="tool",
@@ -409,10 +438,8 @@ class AgentRunner:
                     tool_call_id=tool_call.get("id", ""),
                 )
 
-            # 递归调用获取最终响应
             return await self._execute_loop(session)
 
-        # 返回最终响应
         return response.get("content", "")
 
     async def _call_llm(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
