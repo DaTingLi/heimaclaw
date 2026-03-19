@@ -322,11 +322,22 @@ class AgentRunner:
         if session_id:
             try:
                 session = await self.session_manager.get(session_id)
-                if not session:
-                    # 会话不存在，使用 None 让 SessionManager 创建新会话
-                    session_id = None
+                if session is None:
+                    # 会话不存在，创建新会话
+                    session = await self.session_manager.create(
+                        agent_id=self.agent_id,
+                        channel=channel,
+                        user_id=user_id,
+                    )
+                    self._active_sessions[session.session_id] = session
             except Exception:
-                session_id = None
+                # 获取失败，创建新会话
+                session = await self.session_manager.create(
+                    agent_id=self.agent_id,
+                    channel=channel,
+                    user_id=user_id,
+                )
+                self._active_sessions[session.session_id] = session
         else:
             session = await self.session_manager.create(
                 agent_id=self.agent_id,
@@ -336,7 +347,8 @@ class AgentRunner:
             self._active_sessions[session.session_id] = session
 
         # 标记是否加载历史
-        session.context["load_history"] = not is_group_chat
+        if session.context:
+            session.context["load_history"] = not is_group_chat
 
         # 添加用户消息到会话管理器
         await self.session_manager.add_message(
