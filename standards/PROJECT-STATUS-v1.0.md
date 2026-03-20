@@ -16,7 +16,9 @@ Token 监控    ██████████░░  90%
 生产部署      ████████████ 100%
 沙箱抽象层    ████████████ 100%
 Agent 运行时  ████████████ 100%
-LLM 集成      █████████░░░  90%
+LLM 集成      ██████████░░  95%
+Planner       ████░░░░░░░  40%  ← 新增！
+Subagent 集成 ██░░░░░░░░░  20%  ← 新增！
 FastAPI 服务  █████████░░░  90%
 渠道适配器    ██████░░░░░░  60%
 配置系统      ████████████ 100%
@@ -91,6 +93,7 @@ Subagent 系统  ████████████ 100%  ← 新增！
 |--------|------|------|
 | 🟡 中 | Phase 3 热重载 | 配置热加载 |
 | 🟡 中 | 端到端测试 | 完整对话流程 |
+| 🟡 中 | Planner 完善 | 任务分解逻辑优化 |
 | 🟢 低 | 渠道联调 | 飞书/企微 |
 | 🟢 低 | 向量检索 | 可选 |
 
@@ -105,6 +108,7 @@ Subagent 系统  ████████████ 100%  ← 新增！
 | 2026-03-19 | 模型分层策略 | 按任务复杂度选模型 |
 | 2026-03-19 | 并发控制 | 最多 5 个子 Agent/会话 |
 | 2026-03-19 | Agent 集成 | MemoryManager |
+| 2026-03-20 | 任务分解架构 | Planner + Subagent 分派 |
 
 ---
 
@@ -128,3 +132,36 @@ Subagent 系统  ████████████ 100%  ← 新增！
 ---
 
 _更新日期：2026-03-19 17:51_
+
+---
+
+## 2026-03-20 重大更新
+
+### Python 3.12 + DeepAgents 升级完成
+
+**状态**: ✅ 完成
+
+**关键变更**:
+1. 升级到 Python 3.12.13
+2. 安装 deepagents 0.5.0
+3. 使用 `create_deep_agent` + `LocalShellBackend`
+4. 禁用旧版 ReAct 循环
+
+**验证**:
+```bash
+python3.12 --version  # Python 3.12.13
+python3.12 -c "from deepagents import create_deep_agent; print('OK')"  # OK
+```
+
+**启动日志**:
+```
+[Runner] DeepAgents 初始化成功
+[DeepAgentsWrapper] 初始化完成 (create_deep_agent + LocalShellBackend)
+```
+
+**测试结果**:
+- Flask 应用创建成功
+- 部署到 5000 端口
+- 返回访问 URL
+
+**架构文件**: `standards/ARCHITECTURE-v1.0.md`

@@ -8,6 +8,8 @@ import json
 from typing import Any, Optional
 
 from heimaclaw.agent.react import ExecutionResult, ReActEngine
+from heimaclaw.agent.deepagents_wrapper import DeepAgentsWrapper
+from heimaclaw.agent.planner_executor import Planner, SimpleExecutor
 from heimaclaw.agent.session import Session, SessionManager
 from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
 from heimaclaw.console import agent_event, error, info, warning
@@ -172,6 +174,9 @@ class AgentRunner:
 
         # ReAct 推理引擎
         self._react_engine: Optional[ReActEngine] = None
+        self._planner: Optional[Planner] = None
+        self._deep_agent: Optional[DeepAgentsWrapper] = None
+        self._executor: Optional[SimpleExecutor] = None
 
         # 上下文模式: "full"=完整历史, "compact"=摘要历史, "minimal"=仅当前
         # 强制使用 full 模式启用记忆
@@ -220,11 +225,42 @@ class AgentRunner:
                 agent_runner_factory=self._create_subagent_runner,
             )
 
-            # 初始化 ReAct 推理引擎
+            # 初始化 DirectAgent (LangGraph + TodoListMiddleware)
             if self._llm_adapter:
+                # 获取 LLM 配置
+                # 从 LLM adapter 获取配置
+                adapter_config = getattr(self._llm_adapter, 'config', None)
+                if adapter_config:
+                    llm_base_url = getattr(adapter_config, 'base_url', 'https://open.bigmodel.cn/api/coding/paas/v4/')
+                    llm_api_key = getattr(adapter_config, 'api_key', '1234567890')
+                    llm_model = getattr(adapter_config, 'model', 'glm-5')
+                else:
+                    llm_base_url = 'https://open.bigmodel.cn/api/coding/paas/v4/'
+                    llm_api_key = '1234567890'
+                    llm_model = 'glm-5'
+                    print(f"[Runner] Warning: _llm_adapter.config not found, using defaults")
+                
+                try:
+                    self._deep_agent = DeepAgentsWrapper(
+                        base_url=llm_base_url,
+                        api_key=llm_api_key,
+                        model_name=llm_model,
+                    )
+                    # 异步初始化
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(self._deep_agent.initialize())
+                    else:
+                        loop.run_until_complete(self._deep_agent.initialize())
+                    print("[Runner] DeepAgents 初始化成功")
+                except Exception as e:
+                    print(f"[Runner] DeepAgents 初始化失败: {e}")
+                    self._deep_agent = None
+
+                # 保留 ReActEngine 作为后备
                 self._react_engine = ReActEngine(
-                    # event_bus=self._event_bus,  # 简化后不再需要
-                    subagent_spawner=self._subagent_spawner,  # 传递 SubagentSpawner
+                    subagent_spawner=self._subagent_spawner,
                     tool_registry=self.tool_registry,
                     llm_callable=self._llm_adapter.chat,
                 )
@@ -493,6 +529,7 @@ class AgentRunner:
         if depth >= max_depth:
             warning(f"Agent 执行达到最大递归深度 ({max_depth})，停止执行")
             return "工具执行已达最大次数，停止执行。"
+        
 
         # 获取会话历史（群聊模式不加载历史）
         messages = await self.session_manager.get_messages(session.session_id)
@@ -520,6 +557,28 @@ class AgentRunner:
                     summary = memory_context[0] if memory_context else None
                     if summary:
                         history = [summary] + history
+
+        # 优先使用 DirectAgent (LangGraph + TodoListMiddleware)
+        # DirectAgent 已禁用
+        if self._deep_agent and depth == 0:
+            try:
+                # 从 history 中获取用户消息
+                user_message = ""
+                for msg in reversed(history):
+                    if msg.get("role") == "user":
+                        user_message = msg.get("content", "")
+                        break
+                
+                if not user_message and hasattr(session, 'pending_message'):
+                    user_message = session.pending_message or ""
+                
+                if user_message:
+                    print(f"[Runner] 使用 DeepAgents 执行: {user_message[:50]}...")
+                    result = await self._deep_agent.run(user_message)
+                    print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
+                    return result
+            except Exception as e:
+                print(f"[Runner] DeepAgents 执行失败: {e}，使用原有引擎")
 
         # 使用 ReAct 引擎执行
         if self._react_engine and self._llm_adapter:
@@ -555,7 +614,9 @@ class AgentRunner:
                 return result.final_response
 
             except Exception as e:
-                error(f"ReAct 执行失败: {e}")
+                import traceback
+                tb = traceback.format_exc()
+                error(f"ReAct 执行失败: {e}\n完整 traceback:\n{tb}")
                 # 降级到普通 LLM 调用
 
         # 降级：使用普通 LLM 调用
@@ -769,3 +830,4 @@ class AgentRunner:
         """
         if self._llm_config:
             self._llm_config["api_key"] = api_key
+
