@@ -4,6 +4,9 @@ Agent 运行器模块
 管理 Agent 的生命周期和执行循环。
 """
 
+# DeepAgents 历史消息限制（避免 context 膨胀导致超时）
+MAX_DEEPAGENTS_HISTORY = 20
+
 import json
 from typing import Any, Optional
 
@@ -562,9 +565,12 @@ class AgentRunner:
         # 使用 DeepAgents (LangGraph + TodoListMiddleware)
         if self._deep_agent and depth == 0:
             try:
-                # 传递完整消息历史给 DeepAgents（记忆闭环关键）
-                print(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history)} 条")
-                result = await self._deep_agent.run(history)
+                # 限制历史消息数量，避免 context 膨胀导致超时
+                history_for_deepagents = history[-MAX_DEEPAGENTS_HISTORY:] if len(history) > MAX_DEEPAGENTS_HISTORY else history
+                if len(history) > MAX_DEEPAGENTS_HISTORY:
+                    print(f"[Runner] 历史消息已压缩: {len(history)} -> {len(history_for_deepagents)} 条")
+                print(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history_for_deepagents)} 条")
+                result = await self._deep_agent.run(history_for_deepagents)
                 print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
                 return result
             except Exception as e:

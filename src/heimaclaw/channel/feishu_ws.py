@@ -164,7 +164,16 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             if isinstance(content, str):
                 try:
                     content_obj = json.loads(content)
+                    # 尝试获取文本
                     content_text = content_obj.get("text", "")
+                    # 如果没有文本，可能是文件或图片
+                    if not content_text:
+                        if "file_key" in content_obj:
+                            content_text = f"[收到文件: {content_obj.get('file_name', 'unknown')}]"
+                        elif "image_key" in content_obj:
+                            content_text = "[收到一张图片]"
+                        else:
+                            content_text = "[收到一条非文本消息]"
                 except Exception:
                     content_text = content
             else:

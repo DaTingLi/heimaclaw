@@ -32,7 +32,8 @@ BUILTIN_ALIASES = [
         name="claude",
         command="claude",
         description="Claude Code 编程助手 - 直接帮你写代码",
-        args_template="-p '{args}'" if '{args}' else "",
+        # 强制添加 --yes 标志，防止交互式确认导致死锁
+        args_template="-p '{args}' --yes" if '{args}' else "--yes",
     ),
     CommandAlias(
         name="python",
