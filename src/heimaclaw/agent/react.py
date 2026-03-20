@@ -1,21 +1,25 @@
 """
-ReAct 推理引擎
+ReAct 推理引擎 - 简化版（参考 DeepAgents）
 
-基于 pi-mono 双层 Loop 理念 + Thought/Action/Observation 模式
+核心改进：
+- 子 Agent 启动后立即返回 job_id
+- 不再依赖 EventBus
+- 通过 registry.check() 查询结果
 """
+
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from enum import Enum
 
-from heimaclaw.agent.events import AgentEvent, EventType, EventStream, create_event_stream
-from heimaclaw.agent.tools import ToolRegistry, get_tool_registry
+from heimaclaw.agent.tools import ToolRegistry
+from heimaclaw.agent.planner import Planner, ExecutionPlan, ExecutionStep, ExecutionMode
 from heimaclaw.interfaces import ToolResult
 
 
 class StepType(str, Enum):
-    """步骤类型"""
     THOUGHT = "thought"
     ACTION = "action"
     OBSERVATION = "observation"
@@ -25,265 +29,240 @@ class StepType(str, Enum):
 
 @dataclass
 class Step:
-    """执行步骤"""
     type: StepType
     content: str
     tool_name: Optional[str] = None
-    tool_args: Optional[dict] = None
     result: Optional[str] = None
     success: bool = True
 
 
 @dataclass
 class ExecutionResult:
-    """执行结果"""
     steps: list[Step] = field(default_factory=list)
     final_response: str = ""
     success: bool = True
     error: Optional[str] = None
 
-    def to_dict(self) -> dict:
-        return {
-            "steps": [
-                {
-                    "type": s.type.value,
-                    "content": s.content,
-                    "tool": s.tool_name,
-                    "args": s.tool_args,
-                    "result": s.result,
-                    "success": s.success,
-                }
-                for s in self.steps
-            ],
-            "final_response": self.final_response,
-            "success": self.success,
-            "error": self.error,
-        }
-
 
 class ReActEngine:
     """
-    ReAct 推理引擎
+    ReAct 推理引擎 - 简化版
+    
+    不再使用 EventBus，改为：
+    - subagent_spawner.launch() 立即返回 job_id
+    - subagent_spawner.check() 查询结果
     """
-
-    MAX_ITERATIONS = 3  # 减少迭代次数避免重复调用
 
     def __init__(
         self,
         tool_registry: ToolRegistry,
-        llm_callable: Any,
+        llm_callable: Any = None,
+        subagent_spawner: Any = None,
     ):
         self.tool_registry = tool_registry
         self.llm = llm_callable
-        self._streaming_callback = None
-
-    def set_streaming_callback(self, callback):
-        """设置流式回调"""
-        self._streaming_callback = callback
+        self.subagent_spawner = subagent_spawner
+        self._planner = Planner(tool_registry, llm_callable)
 
     async def execute(
         self,
         user_message: str,
         context: list[dict[str, str]],
         system_prompt: str = "",
+        session_id: str = "",
     ) -> ExecutionResult:
-        """执行 ReAct 推理"""
-        from heimaclaw.llm.base import Message as LLMMessage
-
+        """执行推理"""
         result = ExecutionResult()
-        messages = context.copy()
 
-        # 添加用户消息
-        messages.append({"role": "user", "content": user_message})
+        print(f"[Planner] 分析任务: {user_message[:50]}...")
+        
+        # 获取可用工具
+        tools = self.tool_registry.get_openai_tools()
+        
+        # LLM 规划任务分解
+        plan: ExecutionPlan = await self._planner.plan(user_message, tools)
+        
+        print(f"[Planner] 生成计划: {len(plan.steps)} 个步骤")
+        print(f"[Planner] reasoning: {plan.reasoning[:80] if plan.reasoning else 'N/A'}...")
+        
+        for step in plan.steps:
+            print(f"[Planner]   {step.step_id}: {step.description} (mode={step.execution_mode.value})")
 
-        iteration = 0
-        has_tool_calls = True
-
-        tool_result_summary = ""  # 累积工具执行结果
-
-        while has_tool_calls and iteration < self.MAX_ITERATIONS:
-            iteration += 1
-
-            # 调用 LLM
-            response = await self._call_llm(messages, system_prompt)
-
-            # 添加助手响应
-            content = response.get("content", "")
-            messages.append({"role": "assistant", "content": content})
-
-            # 检查是否有工具调用
-            tool_calls = response.get("tool_calls", [])
-
-            if not tool_calls:
-                has_tool_calls = False
-                result.final_response = content
-                result.steps.append(Step(
-                    type=StepType.RESPONSE,
-                    content=content,
-                ))
+        # 执行步骤
+        step_results = {}
+        
+        # 按依赖关系分组执行
+        execution_groups = self._build_execution_groups(plan.steps)
+        
+        print(f"[ReAct] 执行层级: {len(execution_groups)} groups")
+        
+        for group in execution_groups:
+            # 判断是否并行
+            can_parallel = all(
+                not step.depends_on or all(d in step_results for d in step.depends_on)
+                for step in group
+            )
+            
+            if can_parallel and len(group) > 1:
+                # 并行执行
+                print(f"[ReAct] 并行执行 {len(group)} 个步骤")
+                results = await self._execute_parallel(group)
+                step_results.update(results)
             else:
-                # 执行工具
-                tool_results = await self._execute_tools(tool_calls, messages)
-
-                # 累积工具结果（用于最终回复）
-                for i, tool_result in enumerate(tool_results):
-                    tool_text = str(tool_result)
-                    tool_result_summary += f"\n{tool_text}"
-                    # 获取 tool_call_id
-                    tool_call_id = tool_calls[i].get("id", f"tool_{i}")
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_text,
-                        "tool_call_id": tool_call_id,
-                        "name": tool_calls[i].get("function", {}).get("name", ""),
-                    })
+                # 串行执行
+                for step in group:
+                    print(f"[ReAct] 串行执行: {step.step_id}")
+                    res = await self._execute_step(step)
+                    step_results[step.step_id] = res
                     result.steps.append(Step(
                         type=StepType.OBSERVATION,
-                        content=tool_text,
-                        success=True,
+                        content=res,
+                        tool_name=step.tool_name,
+                        success=not str(res).startswith("错误:"),
                     ))
 
-        # 如果有工具执行结果，让 LLM 总结
-        if tool_result_summary:
-            if has_tool_calls or iteration >= self.MAX_ITERATIONS:
-                # 有更多工具调用或达到最大迭代，用工具结果总结
-                result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
-            else:
-                # 让 LLM 总结工具结果
-                summary_prompt = f"""基于以下工具执行结果，请简洁总结回答用户的问题：
-
-工具执行结果：
-{tool_result_summary}
-
-请用自然语言简洁回复用户。"""
-
-                # 调用 LLM 总结
-                try:
-                    summary_response = await self._call_llm(
-                        messages=[{"role": "user", "content": summary_prompt}],
-                        system_prompt="你是一个助手，基于工具执行结果回答用户问题。简洁明了。",
-                    )
-                    result.final_response = summary_response.get("content", tool_result_summary)
-                except Exception:
-                    result.final_response = f"工具执行完成，结果如下：{tool_result_summary}"
-
+        # 汇总结果
+        all_results = list(step_results.values())
+        if all_results:
+            result.final_response = self._summarize_results(all_results)
+        else:
+            result.final_response = "任务执行完成"
+        
+        result.success = not any(str(r).startswith("错误:") for r in all_results)
         return result
 
-    async def _call_llm(
-        self,
-        messages: list[dict[str, str]],
-        system_prompt: str,
-    ) -> dict:
-        """调用 LLM（支持工具）"""
-        from heimaclaw.llm.base import Message as LLMMessage
+    def _build_execution_groups(self, steps: list[ExecutionStep]) -> list[list[ExecutionStep]]:
+        """根据依赖关系构建执行层级"""
+        groups = []
+        remaining = steps.copy()
+        completed = set()
+        
+        while remaining:
+            current_group = []
+            still_remaining = []
+            
+            for step in remaining:
+                deps_met = all(d in completed for d in step.depends_on)
+                if deps_met:
+                    current_group.append(step)
+                else:
+                    still_remaining.append(step)
+            
+            if not current_group:
+                if groups and still_remaining:
+                    groups.append(still_remaining)
+                elif not groups:
+                    groups.append(remaining)
+                break
+            
+            groups.append(current_group)
+            for step in current_group:
+                completed.add(step.step_id)
+            remaining = still_remaining
+        
+        return groups
 
-        prompt = self._build_react_prompt(system_prompt)
-
-        try:
-            # 构建消息
-            llm_messages = []
-            for msg in messages:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                if role in ("user", "assistant", "system"):
-                    llm_messages.append(LLMMessage(role=role, content=content))
-
-            # 添加系统提示
-            if prompt:
-                llm_messages.insert(0, LLMMessage(role="system", content=prompt))
-
-            # 获取工具定义
-            tools = self.tool_registry.get_openai_tools()
-
-            # 调用 LLM
-            response = await self.llm(
-                messages=llm_messages,
-                tools=tools if tools else None,
-            )
-
-            # DEBUG: 打印原始响应
-            print(f"[DEBUG] LLM 原始响应 type={type(response)}, content={getattr(response, 'content', 'N/A')}, tool_calls={getattr(response, 'tool_calls', 'N/A')}")
-
-            # 解析响应
-            if hasattr(response, "tool_calls") and response.tool_calls:
-                return {
-                    "content": getattr(response, "content", "") or "",
-                    "tool_calls": [
-                        tc.to_dict() if hasattr(tc, "to_dict") else tc
-                        for tc in response.tool_calls
-                    ]
-                }
-            elif isinstance(response, dict):
-                return {"content": response.get("content", ""), "tool_calls": None}
+    async def _execute_parallel(self, steps: list[ExecutionStep]) -> dict:
+        """并行执行多个步骤"""
+        async def run_step(step: ExecutionStep):
+            return step.step_id, await self._execute_step(step)
+        
+        results = await asyncio.gather(*[run_step(s) for s in steps], return_exceptions=True)
+        
+        result_dict = {}
+        for r in results:
+            if isinstance(r, Exception):
+                result_dict[r.args[0] if r.args else "unknown"] = f"错误: {str(r)}"
             else:
-                # 确保提取 .content 属性
-                if hasattr(response, "content"):
-                    return {"content": response.content or "", "tool_calls": None}
-                else:
-                    return {"content": str(response), "tool_calls": None}
+                result_dict[r[0]] = r[1]
+        
+        return result_dict
 
+    async def _execute_step(self, step: ExecutionStep) -> str:
+        """执行单个步骤"""
+        if step.execution_mode == ExecutionMode.SUBAGENT and self.subagent_spawner:
+            return await self._execute_via_subagent(step)
+        else:
+            return await self._execute_direct(step)
+
+    async def _execute_direct(self, step: ExecutionStep) -> str:
+        """直接执行工具"""
+        try:
+            tool_result: ToolResult = await self.tool_registry.execute(
+                name=step.tool_name,
+                parameters=step.parameters,
+            )
+            return str(tool_result.result) if tool_result.success else f"错误: {tool_result.error}"
         except Exception as e:
-            return {"content": f"LLM 调用失败: {e}", "tool_calls": None}
+            return f"错误: {str(e)}"
 
-    def _build_react_prompt(self, system_prompt: str) -> str:
-        """构建 ReAct 提示"""
-        tools = self.tool_registry.get_openai_tools()
-        tools_desc = []
-        for t in tools:
-            func = t.get("function", {})
-            name = func.get("name", "unknown")
-            desc = func.get("description", "")
-            tools_desc.append(f"- {name}: {desc}")
+    async def _execute_via_subagent(self, step: ExecutionStep) -> str:
+        """通过子 Agent 执行（简化版）"""
+        if not self.subagent_spawner:
+            return await self._execute_direct(step)
+        
+        from heimaclaw.core.subagent_spawn import SpawnConfig
+        
+        # 创建配置
+        spawn_config = SpawnConfig(
+            task=step.subagent_task or step.description,
+            agent_id="default",
+            timeout_seconds=step.estimated_duration_seconds + 60,
+        )
+        
+        # 启动子 Agent，立即返回 job_id
+        print(f"[ReAct] 启动子 Agent: {spawn_config.task[:50]}...")
+        spawn_result = await self.subagent_spawner.launch(spawn_config)
+        
+        if spawn_result.status != "accepted":
+            return f"错误: 子 Agent 启动失败 - {spawn_result.error}"
+        
+        job_id = spawn_result.job_id
+        print(f"[ReAct] 子 Agent 已启动，job_id={job_id}，等待完成...")
+        
+        # 等待完成（带超时）
+        timeout = step.estimated_duration_seconds + 60
+        start_time = asyncio.get_event_loop().time()
+        
+        while True:
+            job = await self.subagent_spawner.check(job_id)
+            
+            if not job:
+                print(f"[ReAct] 任务丢失: job_id={job_id}")
+                return f"错误: 任务丢失 (job_id={job_id})"
+            
+            print(f"[ReAct] 子 Agent {job_id} 状态: {job.status.value}, result={job.result}, error={job.error}")
+            
+            if job.status.value == "success":
+                print(f"[ReAct] 子 Agent {job_id} 完成, 返回: {job.result[:100] if job.result else 'None'}...")
+                return job.result or "(无输出)"
+            
+            if job.status.value == "failed":
+                print(f"[ReAct] 子 Agent {job_id} 失败: {job.error}")
+                return f"错误: {job.error}"
+            
+            if job.status.value == "cancelled":
+                return f"错误: 任务被取消"
+            
+            # 检查超时
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed >= timeout:
+                await self.subagent_spawner.cancel(job_id)
+                return f"错误: 执行超时 ({timeout}s)"
+            
+            # 等待一下再检查
+            await asyncio.sleep(1)
 
-        base = f"""你是一个智能助手，可以通过工具来完成任务。
-
-可用工具：
-{chr(10).join(tools_desc)}
-
-当你需要执行操作时，使用以下格式：
-```json
-{{"name": "工具名", "arguments": {{"参数名": "参数值"}}}}
-```
-
-当你知道答案时，直接回复，不要调用工具。
-
-"""
-        if system_prompt:
-            base += f"\n系统提示：{system_prompt}"
-
-        return base
-
-    async def _execute_tools(
-        self,
-        tool_calls: list[dict],
-        messages: list[dict],
-    ) -> list[str]:
-        """执行工具"""
-        results = []
-
-        for tool_call in tool_calls:
-            try:
-                func = tool_call.get("function", {})
-                name = func.get("name", "")
-                args = func.get("arguments", {})
-
-                if isinstance(args, str):
-                    try:
-                        args = json.loads(args)
-                    except Exception:
-                        args = {}
-
-                result: ToolResult = await self.tool_registry.execute(
-                    name=name,
-                    parameters=args,
-                )
-
-                if result.success:
-                    results.append(str(result.result))
-                else:
-                    results.append(f"错误: {result.error}")
-
-            except Exception as e:
-                results.append(f"工具执行异常: {e}")
-
-        return results
+    def _summarize_results(self, results: list[str]) -> str:
+        """汇总结果"""
+        if not results:
+            return "执行完成，无输出"
+        
+        summary_parts = []
+        for i, r in enumerate(results, 1):
+            r_str = str(r)
+            if len(r_str) > 500:
+                r_str = r_str[:500] + "..."
+            summary_parts.append(f"【步骤 {i}】\n{r_str}")
+        
+        return "工具执行完成，结果如下：\n\n" + "\n\n".join(summary_parts)

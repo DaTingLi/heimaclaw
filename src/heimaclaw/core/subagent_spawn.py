@@ -1,290 +1,219 @@
 """
-Subagent Spawner - 子 Agent 派生工具
+SubagentSpawner - 简化的子 Agent 分派器
 
-参考：
-- OpenClaw subagent-spawn.ts
-- sessions_spawn 工具
+核心设计（参考 DeepAgents）：
+- 启动后立即返回 job_id，不等待
+- 使用 Registry 追踪状态
+- 主 Agent 通过 job_id 查询结果
 
-功能：
-- 派生独立的子 Agent
-- 支持模型覆盖（成本优化）
-- 支持并行执行
-- 自动发送完成事件
+不再依赖 EventBus 事件机制。
 """
 
 import asyncio
+import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional, Callable
-from pathlib import Path
+from enum import Enum
+from typing import Any, Callable, Optional
 
-from .event_bus import EventBus, Event, EventType, EventLevel
-from .subagent_registry import SubagentRegistry, SubagentRun, SubagentStatus
+
+class SubagentStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class SubagentJob:
+    """子 Agent 任务"""
+    job_id: str
+    task: str
+    status: SubagentStatus = SubagentStatus.PENDING
+    result: Optional[str] = None
+    error: Optional[str] = None
+
+
+class SimpleRegistry:
+    """简化的任务注册表"""
+    
+    def __init__(self):
+        self._jobs: dict[str, SubagentJob] = {}
+    
+    def create(self, task: str) -> SubagentJob:
+        job_id = str(uuid.uuid4())[:8]
+        job = SubagentJob(job_id=job_id, task=task)
+        self._jobs[job_id] = job
+        return job
+    
+    def get(self, job_id: str) -> Optional[SubagentJob]:
+        return self._jobs.get(job_id)
+    
+    def update(self, job_id: str, status: SubagentStatus, result: str = None, error: str = None):
+        job = self._jobs.get(job_id)
+        if job:
+            job.status = status
+            if result is not None:
+                job.result = result
+            if error is not None:
+                job.error = error
 
 
 @dataclass
 class SpawnConfig:
     """派生配置"""
-
-    task: str  # 任务描述
-    agent_id: Optional[str] = None  # 指定 Agent ID
-    model: Optional[str] = None  # 模型覆盖
-    mode: str = "run"  # "run" 或 "session"
-    sandbox: str = "inherit"  # "inherit" 或 "require"
+    task: str
+    agent_id: Optional[str] = None
     timeout_seconds: Optional[int] = None
-    workspace_dir: Optional[str] = None
-    tools_allowlist: Optional[list[str]] = None  # 工具白名单
-    thinking: str = "off"  # "off" | "on" | "stream"
 
 
 @dataclass
 class SpawnResult:
     """派生结果"""
-
     status: str  # "accepted" | "forbidden" | "error"
-    child_session_key: Optional[str] = None
-    run_id: Optional[str] = None
+    job_id: Optional[str] = None
     note: Optional[str] = None
     error: Optional[str] = None
 
 
 class SubagentSpawner:
     """
-    子 Agent 派生器
+    简化的子 Agent 分派器
     
-    负责派生、监控和通知子 Agent。
+    核心变化：
+    - 不再依赖 EventBus
+    - 使用简单的 Registry 追踪状态
+    - launch() 立即返回 job_id
+    - check() 查询状态和结果
     """
 
     def __init__(
         self,
-        event_bus: EventBus,
-        registry: SubagentRegistry,
         agent_runner_factory: Callable,
-        max_concurrent_per_session: int = 5,
+        max_concurrent: int = 5,
     ):
-        self.event_bus = event_bus
-        self.registry = registry
         self.agent_runner_factory = agent_runner_factory
-        self.max_concurrent_per_session = max_concurrent_per_session
+        self.max_concurrent = max_concurrent
+        self._registry = SimpleRegistry()
+        self._running_count = 0
 
-    async def spawn(
-        self,
-        config: SpawnConfig,
-        requester_session_key: str,
-        requester_agent_id: str,
-    ) -> SpawnResult:
+    async def launch(self, config: SpawnConfig) -> SpawnResult:
         """
-        派生子 Agent
+        启动子 Agent，立即返回 job_id
         
         Args:
             config: 派生配置
-            requester_session_key: 父 Agent 会话 ID
-            requester_agent_id: 父 Agent ID
         
         Returns:
-            SpawnResult
+            SpawnResult with job_id
         """
-        # 1. 检查并发限制
-        active_count = self.registry.count_active_for_session(requester_session_key)
-        if active_count >= self.max_concurrent_per_session:
+        # 检查并发限制
+        if self._running_count >= self.max_concurrent:
             return SpawnResult(
                 status="forbidden",
-                error=f"已达到最大并发数 ({self.max_concurrent_per_session})",
+                error=f"达到最大并发数 ({self.max_concurrent})"
             )
-
-        # 2. 创建运行记录
-        run = SubagentRun(
-            requester_session_key=requester_session_key,
-            task=config.task,
-            agent_id=config.agent_id or requester_agent_id,
-            model=config.model,
-            mode=config.mode,
-            sandbox=config.sandbox,
-            timeout_seconds=config.timeout_seconds,
-        )
-
-        # 3. 生成子会话 ID
-        run.child_session_key = f"{requester_session_key}:subagent:{run.run_id}"
-
-        # 4. 注册到 Registry
-        self.registry.register(run)
-
-        # 5. 发射 SPAWNED 事件
-        await self.event_bus.emit(Event(
-            type=EventType.SUBAGENT_SPAWNED,
-            level=EventLevel.INFO,
-            agent_id=requester_agent_id,
-            session_key=requester_session_key,
-            run_id=run.run_id,
-            data={
-                "child_session_key": run.child_session_key,
-                "task": config.task,
-                "model": config.model,
-            },
-        ))
-
-        # 6. 异步启动子 Agent（不阻塞）
-        asyncio.create_task(self._run_subagent(run, config))
-
+        
+        # 创建任务
+        job = self._registry.create(config.task)
+        
+        # 异步执行
+        self._running_count += 1
+        asyncio.create_task(self._run(job.job_id, config))
+        
         return SpawnResult(
             status="accepted",
-            child_session_key=run.child_session_key,
-            run_id=run.run_id,
-            note="子 Agent 已异步启动。完成时将通过事件通知。",
+            job_id=job.job_id,
+            note=f"后台任务已启动，job_id: {job.job_id}"
         )
 
-    async def _run_subagent(self, run: SubagentRun, config: SpawnConfig):
-        """
-        运行子 Agent（内部方法）
-        """
+    async def _run(self, job_id: str, config: SpawnConfig):
+        """执行子 Agent"""
+        job = self._registry.get(job_id)
+        if not job:
+            return
+        
         try:
-            # 标记为运行中
-            self.registry.mark_started(run.run_id)
-
-            # 发射 STARTED 事件
-            await self.event_bus.emit(Event(
-                type=EventType.SUBAGENT_STARTED,
-                level=EventLevel.INFO,
-                agent_id=run.agent_id,
-                session_key=run.child_session_key,
-                run_id=run.run_id,
-                data={"task": run.task},
-            ))
-
+            job.status = SubagentStatus.RUNNING
+            
             # 创建 Agent Runner
             runner = self.agent_runner_factory(
-                agent_id=run.agent_id,
-                session_key=run.child_session_key,
-                model=run.model,
-                workspace_dir=config.workspace_dir,
-                tools_allowlist=config.tools_allowlist,
-                thinking=config.thinking,
+                agent_id=config.agent_id or "default",
+                session_key=f"subagent:{job_id}",
+                model=None,
             )
-
-            # 执行任务
-            result = await runner.execute(
-                user_message=run.task,
-                context=[],  # 子 Agent 有独立的上下文窗口
-                system_prompt="",
-            )
-
-            # 提取结果文本
-            result_text = result.final_response or "(无输出)"
-
-            # 标记为完成
-            self.registry.mark_completed(run.run_id, result_text)
-
-            # 发射 COMPLETED 事件
-            await self.event_bus.emit(Event(
-                type=EventType.SUBAGENT_COMPLETED,
-                level=EventLevel.INFO,
-                agent_id=run.agent_id,
-                session_key=run.child_session_key,
-                run_id=run.run_id,
-                data={
-                    "result_text": result_text,
-                    "tokens_used": result.tokens_used if hasattr(result, "tokens_used") else 0,
-                },
-            ))
-
+            
+            # 启动 Runner
+            await runner.start()
+            
+            # 执行命令
+            result_text = await self._execute_command(runner, config.task)
+            
+            # 标记成功
+            job.status = SubagentStatus.SUCCESS
+            job.result = result_text
+            
         except asyncio.TimeoutError:
-            # 超时
-            self.registry.update(run.run_id, status=SubagentStatus.TIMEOUT)
-            await self.event_bus.emit(Event(
-                type=EventType.SUBAGENT_FAILED,
-                level=EventLevel.ERROR,
-                agent_id=run.agent_id,
-                session_key=run.child_session_key,
-                run_id=run.run_id,
-                data={"error": "执行超时"},
-            ))
-
+            job.status = SubagentStatus.FAILED
+            job.error = "执行超时"
+            
         except Exception as e:
-            # 失败
-            error_msg = str(e)
-            self.registry.mark_failed(run.run_id, error_msg)
+            job.status = SubagentStatus.FAILED
+            job.error = str(e)
+            
+        finally:
+            self._running_count -= 1
+            try:
+                await runner.stop()
+            except:
+                pass
 
-            await self.event_bus.emit(Event(
-                type=EventType.SUBAGENT_FAILED,
-                level=EventLevel.ERROR,
-                agent_id=run.agent_id,
-                session_key=run.child_session_key,
-                run_id=run.run_id,
-                data={"error": error_msg},
-            ))
+    async def _execute_command(self, runner, task: str) -> str:
+        """执行命令"""
+        import re
+        
+        # 从 task 中提取命令
+        command = None
+        
+        if "执行命令:" in task:
+            match = re.search(r'执行命令:\s*(.+)', task)
+            if match:
+                command = match.group(1).strip()
+        
+        if not command:
+            command = task
+        
+        # 执行
+        tool_result = await runner.tool_registry.execute(
+            name="exec",
+            parameters={"command": command},
+        )
+        
+        if tool_result.success:
+            return str(tool_result.result)
+        else:
+            return f"错误: {tool_result.error}"
 
-    async def kill(self, run_id: str, requester_session_key: str) -> bool:
+    async def check(self, job_id: str) -> Optional[SubagentJob]:
         """
-        杀死子 Agent
+        检查任务状态
         
         Args:
-            run_id: 运行 ID
-            requester_session_key: 请求者会话（验证权限）
+            job_id: 任务 ID
         
         Returns:
-            是否成功
+            SubagentJob 或 None
         """
-        run = self.registry.get(run_id)
-        if not run:
+        return self._registry.get(job_id)
+
+    async def cancel(self, job_id: str) -> bool:
+        """取消任务"""
+        job = self._registry.get(job_id)
+        if not job:
             return False
-
-        # 验证权限
-        if run.requester_session_key != requester_session_key:
+        
+        if job.status in (SubagentStatus.SUCCESS, SubagentStatus.FAILED):
             return False
-
-        # 检查状态
-        if run.status not in {SubagentStatus.PENDING, SubagentStatus.RUNNING}:
-            return False
-
-        # 标记为被杀死
-        self.registry.mark_killed(run_id)
-
-        # 发射 KILLED 事件
-        await self.event_bus.emit(Event(
-            type=EventType.SUBAGENT_KILLED,
-            level=EventLevel.WARNING,
-            agent_id=run.agent_id,
-            session_key=run.child_session_key,
-            run_id=run_id,
-            data={},
-        ))
-
+        
+        job.status = SubagentStatus.CANCELLED
         return True
-
-    async def wait_for_completion(
-        self,
-        run_id: str,
-        timeout_seconds: Optional[int] = None,
-    ) -> Optional[str]:
-        """
-        等待子 Agent 完成
-        
-        Args:
-            run_id: 运行 ID
-            timeout_seconds: 超时时间
-        
-        Returns:
-            结果文本（None 表示失败）
-        """
-        start_time = asyncio.get_event_loop().time()
-
-        while True:
-            run = self.registry.get(run_id)
-            if not run:
-                return None
-
-            # 已完成
-            if run.status == SubagentStatus.COMPLETED:
-                return run.result_text
-
-            # 失败
-            if run.status in {SubagentStatus.FAILED, SubagentStatus.KILLED, SubagentStatus.TIMEOUT}:
-                return None
-
-            # 超时检查
-            if timeout_seconds:
-                elapsed = asyncio.get_event_loop().time() - start_time
-                if elapsed >= timeout_seconds:
-                    return None
-
-            # 等待一段时间再检查
-            await asyncio.sleep(1)

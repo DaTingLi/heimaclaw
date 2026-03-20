@@ -203,6 +203,14 @@ class ConfigCompiler:
                 for key, value in user["preferences"].items():
                     prompts.append(f"- {key}: {value}")
 
+        # 添加 write_todos 使用指南
+        prompts.append("\n\n## 任务规划指南")
+        prompts.append("对于复杂任务，你应该使用 write_todos 工具创建和管理任务列表：")
+        prompts.append("- 复杂多步骤任务（>=3步）必须使用 write_todos")
+        prompts.append("- 任务状态：pending（待处理）、in_progress（进行中）、completed（已完成）")
+        prompts.append("- 开始任务前立即标记为 in_progress")
+        prompts.append("- 完成任务后立即标记为 completed")
+
         return "\n".join(prompts)
 
     def _needs_recompile(self, agent_dir: Path) -> bool:

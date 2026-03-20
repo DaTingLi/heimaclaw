@@ -24,7 +24,7 @@ from heimaclaw.llm.base import LLMProvider
 from heimaclaw.llm.base import Message as LLMMessage
 from heimaclaw.llm.registry import get_llm_registry
 from heimaclaw.memory.manager import MemoryManager
-from heimaclaw.core.event_bus import EventBus, Event, EventType
+# from heimaclaw.core.event_bus import EventBus, Event, EventType  # 暂时禁用 EventBus
 from heimaclaw.core.subagent_spawn import SubagentSpawner, SpawnConfig, SpawnResult
 from heimaclaw.core.subagent_registry import SubagentRegistry
 
@@ -40,6 +40,8 @@ def _register_all_tools():
     from heimaclaw.agent.tools.exec_tool import exec_handler
     from heimaclaw.agent.tools.read_tool import read_handler
     from heimaclaw.agent.tools.write_tool import write_handler
+    from heimaclaw.agent.todos.types import get_write_todos_definition
+    from heimaclaw.agent.todos.tool_handler import write_todos_handler
 
     registry = get_tool_registry()
 
@@ -100,6 +102,16 @@ def _register_all_tools():
         timeout_ms=10000,
     )
 
+    # write_todos 工具 - 参考 LangChain TodoListMiddleware
+    write_todos_def = get_write_todos_definition()
+    registry.register(
+        name=write_todos_def["name"],
+        description=write_todos_def["description"],
+        handler=write_todos_handler,
+        parameters=write_todos_def["parameters"],
+        timeout_ms=5000,
+    )
+
 
 class AgentRunner:
     """
@@ -153,7 +165,7 @@ class AgentRunner:
         self._memory_manager: Optional[MemoryManager] = None
 
         # 事件总线
-        self._event_bus: Optional[EventBus] = None
+        self._event_bus = None  # EventBus 已禁用
 
         # 子 Agent 派生器
         self._subagent_spawner: Optional[SubagentSpawner] = None
@@ -201,19 +213,18 @@ class AgentRunner:
                 )
 
             # 初始化事件总线
-            self._event_bus = EventBus(base_dir=f"/tmp/heimaclaw_events_{self.agent_id}")
+            pass  # self._event_bus = EventBus(...)  # EventBus 已禁用
 
-            # 初始化子 Agent 派生器
-            self._subagent_registry = SubagentRegistry(state_dir=f"/tmp/heimaclaw_subagent_{self.agent_id}")
+            # 初始化子 Agent 派生器（简化版，不再需要 event_bus 和 registry）
             self._subagent_spawner = SubagentSpawner(
-                event_bus=self._event_bus,
-                registry=self._subagent_registry,
                 agent_runner_factory=self._create_subagent_runner,
             )
 
             # 初始化 ReAct 推理引擎
             if self._llm_adapter:
                 self._react_engine = ReActEngine(
+                    # event_bus=self._event_bus,  # 简化后不再需要
+                    subagent_spawner=self._subagent_spawner,  # 传递 SubagentSpawner
                     tool_registry=self.tool_registry,
                     llm_callable=self._llm_adapter.chat,
                 )
@@ -243,7 +254,7 @@ class AgentRunner:
         return AgentRunner(
             agent_id=kwargs.get("agent_id", "subagent"),
             config=self.config,
-            llm_config=kwargs.get("llm_config"),
+            llm_config=kwargs.get("llm_config") or self._llm_config,
         )
 
     async def spawn_subagent(
@@ -461,7 +472,7 @@ class AgentRunner:
 
         info(f"LLM 已配置: {provider.value}/{llm_config.model_name}")
 
-    async def _execute_loop(self, session: Session) -> str:
+    async def _execute_loop(self, session: Session, depth: int = 0, max_depth: int = 10) -> str:
         """
         执行处理循环
 
@@ -472,10 +483,17 @@ class AgentRunner:
 
         参数:
             session: 会话对象
+            depth: 当前递归深度
+            max_depth: 最大递归深度（防止无限循环）
 
         返回:
             最终响应
         """
+        # 防止无限递归
+        if depth >= max_depth:
+            warning(f"Agent 执行达到最大递归深度 ({max_depth})，停止执行")
+            return "工具执行已达最大次数，停止执行。"
+
         # 获取会话历史（群聊模式不加载历史）
         messages = await self.session_manager.get_messages(session.session_id)
         if not session.context.get("load_history", True):
@@ -516,6 +534,7 @@ class AgentRunner:
                 result: ExecutionResult = await self._react_engine.execute(
                     user_message=user_message,
                     context=history,  # 包含完整上下文
+                    session_id=session.session_id,  # 传递 session_id
                 )
 
                 # DEBUG: 检查 result 类型和 final_response
@@ -545,7 +564,21 @@ class AgentRunner:
         tool_calls = response.get("tool_calls", [])
 
         if tool_calls:
-            for tool_call in tool_calls:
+            # 检查重复 tool_calls（防止 LLM 返回重复调用）
+            seen_calls = set()
+            unique_tool_calls = []
+            for tc in tool_calls:
+                tc_name = tc.get("name") or tc.get("function", {}).get("name", "")
+                tc_params = json.dumps(tc.get("parameters") or tc.get("function", {}).get("arguments", {}))
+                tc_key = f"{tc_name}:{tc_params}"
+                if tc_key not in seen_calls:
+                    seen_calls.add(tc_key)
+                    unique_tool_calls.append(tc)
+
+            if len(tool_calls) != len(unique_tool_calls):
+                info(f"去重工具调用: {len(tool_calls)} -> {len(unique_tool_calls)}")
+
+            for tool_call in unique_tool_calls:
                 tool_name = tool_call.get("name") or tool_call.get("function", {}).get(
                     "name", ""
                 )
@@ -576,7 +609,7 @@ class AgentRunner:
                     tool_call_id=tool_call.get("id", ""),
                 )
 
-            return await self._execute_loop(session)
+            return await self._execute_loop(session, depth=depth + 1)
 
         # 确保返回字符串
         if hasattr(response, "content"):
@@ -645,19 +678,6 @@ class AgentRunner:
             }
 
             info(f"LLM 响应: {response.total_tokens} tokens, {latency_ms}ms")
-
-            # 发射 LLM 响应事件
-            if self._event_bus:
-                await self._event_bus.emit(Event(
-                    type=EventType.MESSAGE_RECEIVED,
-                    agent_id=self.agent_id,
-                    session_key=session_key,
-                    data={
-                        "content": response.content,
-                        "model": response.model,
-                        "tokens": response.total_tokens,
-                    },
-                ))
 
             # DEBUG: 检查 result["content"] 的类型和值
             info(f"[DEBUG] _call_llm result['content'] 类型: {type(result['content'])}, 值: {str(result['content'])[:80]}")
