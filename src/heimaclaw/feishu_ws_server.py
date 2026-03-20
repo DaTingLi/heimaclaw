@@ -113,24 +113,36 @@ async def handle_feishu_message(message: InboundMessage) -> None:
         user_id = message.user_id
         chat_id = message.chat_id
         content = message.content
+        content = message.content
 
         # 判断是否群聊：使用飞书原生的 chat_type 字段
         is_group = message.chat_type == "group"
 
         # 获取机器人自己的 ID（用于检测 @）
 
-        # 解析 @提及
+        # 解析 @提及 - 支持飞书占位符格式
         mentions = _router.parse_mentions(content)
-
+        
         # 判断是否被 @（群聊中）
-        is_mentioned = (
-            any(
-                m.lower() in ["bot", "heimaclaw", "default", "test-bot", "test-glm"]
-                for m in mentions
-            )
-            if mentions
-            else False
-        )
+        # 飞书占位符格式: @_user_1, @_user_2 等
+        # 也支持文字格式: @HeimaClaw, @Bot 等
+        is_mentioned = False
+        if mentions:
+            for m in mentions:
+                m_lower = m.lower()
+                # 检查是否是机器人名称
+                if m_lower in ["bot", "heimaclaw", "default", "testbot", "test-glm", "heimaclaw", "claude", "ai"]:
+                    is_mentioned = True
+                    break
+                # 检查是否是飞书占位符格式 @_user_X
+                if m.startswith("_user_"):
+                    is_mentioned = True
+                    break
+        
+        # 内容预处理：移除飞书 @ 占位符，避免 LLM 困惑
+        import re
+        content_clean = re.sub(r'<@_user_\d+>', '', content)
+        content_clean = content_clean.strip()
 
         info(
             f"收到飞书消息: user={user_id}, chat={chat_id}, "

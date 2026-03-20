@@ -370,11 +370,12 @@ class AgentRunner:
             try:
                 session = await self.session_manager.get(session_id)
                 if session is None:
-                    # 会话不存在，创建新会话
+                    # 会话不存在，创建新会话（使用传入的 session_id）
                     session = await self.session_manager.create(
                         agent_id=self.agent_id,
                         channel=channel,
                         user_id=user_id,
+                        session_id=session_id,
                     )
                     self._active_sessions[session.session_id] = session
             except Exception:
@@ -558,25 +559,14 @@ class AgentRunner:
                     if summary:
                         history = [summary] + history
 
-        # 优先使用 DirectAgent (LangGraph + TodoListMiddleware)
-        # DirectAgent 已禁用
+        # 使用 DeepAgents (LangGraph + TodoListMiddleware)
         if self._deep_agent and depth == 0:
             try:
-                # 从 history 中获取用户消息
-                user_message = ""
-                for msg in reversed(history):
-                    if msg.get("role") == "user":
-                        user_message = msg.get("content", "")
-                        break
-                
-                if not user_message and hasattr(session, 'pending_message'):
-                    user_message = session.pending_message or ""
-                
-                if user_message:
-                    print(f"[Runner] 使用 DeepAgents 执行: {user_message[:50]}...")
-                    result = await self._deep_agent.run(user_message)
-                    print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
-                    return result
+                # 传递完整消息历史给 DeepAgents（记忆闭环关键）
+                print(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history)} 条")
+                result = await self._deep_agent.run(history)
+                print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
+                return result
             except Exception as e:
                 print(f"[Runner] DeepAgents 执行失败: {e}，使用原有引擎")
 

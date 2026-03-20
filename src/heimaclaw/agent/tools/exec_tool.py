@@ -108,6 +108,9 @@ class ExecTool:
 # 同步包装器（供 ToolRegistry 调用）
 async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> str:
     """exec 工具的处理函数"""
+    # 记录执行的命令
+    print(f"[EXEC] 执行命令: {command[:200]}")
+    
     tool = ExecTool()
     result = await tool.execute(command, timeout, cwd)
     if result["success"]:

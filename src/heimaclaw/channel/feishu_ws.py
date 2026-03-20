@@ -170,6 +170,22 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             else:
                 content_text = str(content)
 
+            # 【关键修复1】解析 mentions 并替换文本中的占位符
+            mention_names = []
+            if hasattr(msg, "mentions") and msg.mentions:
+                for m in msg.mentions:
+                    key = getattr(m, "key", "")
+                    name = getattr(m, "name", "")
+                    if key and name:
+                        # 把类似 "@_user_1" 替换成真实的 "@HeimaClaw"
+                        content_text = content_text.replace(key, f"@{name}")
+                        mention_names.append(name)
+
+            # 【关键修复2】确定 chat_type (非常重要)
+            chat_type = getattr(msg, "chat_type", "")
+            if not chat_type:
+                chat_type = "group" if (msg.chat_id and msg.chat_id.startswith("oc_")) else "p2p"
+
             # 创建消息对象
             inbound_msg = InboundMessage(
                 message_id=message_id,
@@ -178,33 +194,33 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                 user_name=sender.sender_id.user_id if sender.sender_id else "",
                 content=content_text,
                 message_type="text",
+                chat_type=chat_type,
+                mentions=mention_names,
                 timestamp=time.time(),
                 raw_data={"event": data.event},
             )
 
-            # 回调处理
+            # 回调处理 - Fire-and-Forget 模式（不阻塞）
             if self._message_callback:
                 try:
-                    # 使用线程安全的方式调用异步回调
                     import asyncio
 
                     try:
                         loop = asyncio.get_event_loop()
                         if loop.is_running():
-                            # 如果事件循环正在运行，使用 call_soon_threadsafe
-                            future = asyncio.run_coroutine_threadsafe(
+                            # Fire-and-Forget：只投递任务，不等待结果
+                            asyncio.run_coroutine_threadsafe(
                                 self._message_callback(inbound_msg), loop
                             )
-                            # 等待完成（超时5秒）
-                            future.result(timeout=5)
+                            # 不调用 future.result()！让回调在后台运行
                         else:
-                            # 如果事件循环未运行，直接运行
-                            loop.run_until_complete(self._message_callback(inbound_msg))
+                            # 如果事件循环未运行，用后台任务方式启动
+                            asyncio.ensure_future(self._message_callback(inbound_msg))
                     except RuntimeError:
-                        # 没有事件循环，创建新的
-                        asyncio.run(self._message_callback(inbound_msg))
+                        # 没有事件循环，创建新的后台任务
+                        asyncio.ensure_future(self._message_callback(inbound_msg))
                 except Exception as e:
-                    error(f"消息回调失败: {e}")
+                    error(f"投递消息到处理队列失败: {e}")
 
         except Exception as e:
             error(f"处理飞书消息失败: {e}")
