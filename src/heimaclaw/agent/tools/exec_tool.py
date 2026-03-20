@@ -60,6 +60,22 @@ class ExecTool:
                 "output": "",
                 "exit_code": -1,
             }
+        
+        # 拦截 claude/gemini 等交互式命令，自动后台执行
+        import re
+        cmd_lower = command.lower().strip()
+        block_patterns = [r"^claude", r"^gemini"]
+        if any(re.search(p, cmd_lower) for p in block_patterns):
+            # 追加 --yes 标志并后台执行
+            if not command.strip().endswith("--yes") and not command.strip().endswith("&"):
+                safe_cmd = f"{command.rstrip()} --yes"
+            else:
+                safe_cmd = command
+            # 重定向到日志文件
+            log_file = "./heimaclaw_workspace/cli_agent.log"
+            safe_cmd = f"nohup {safe_cmd} > {log_file} 2>&1 &"
+            info(f"[EXEC] claude/gemini 命令已后台化: {safe_cmd}")
+            command = safe_cmd
 
         try:
             work_dir = Path(cwd)

@@ -26,6 +26,7 @@ class NonBlockingLocalBackend(LocalShellBackend):
     """
     
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
+        info(f"[Backend.execute] 被调用: {command[:80]}...")
         # 需要拦截的阻塞型命令关键词（使用单词边界，避免误匹配文件路径）
         # 例如: "server" 不能匹配 "fruits_server.log"
         block_patterns = [
@@ -39,8 +40,8 @@ class NonBlockingLocalBackend(LocalShellBackend):
         cmd_lower = command.lower()
         
         is_blocking_cmd = any(re.search(p, cmd_lower) for p in block_patterns)
-        # 如果是阻塞命令且没有使用后台运行符
-        if is_blocking_cmd and "&" not in command:
+        # 如果是阻塞命令且没有以 & 结尾（后台运行）
+        if is_blocking_cmd and not command.strip().endswith("&"):
             info(f"[Backend拦截] 检测到阻塞型命令，已自动转入后台: {command}")
             safe_command = (
                 f"nohup {command} > ./heimaclaw_workspace/cli_agent.log 2>&1 & "
@@ -58,7 +59,7 @@ SYSTEM_PROMPT = """你是 HeimaClaw 高级智能助手。
 2. 根据需要**自主生成任意数量的 subagent**（名字、职责你自己决定）。
 3. 所有文件操作严格限制在 ./heimaclaw_workspace 目录内。
 4. 最后用中文完整总结过程和结果。
-5. **严禁前台阻塞式运行需要长期执行或需要用户输入的命令（如 server、claude 等），必须用 nohup xxx >/tmp/log & 将其丢入后台。**
+5. **claude 和 gemini 等 AI CLI 工具会被自动后台化执行**，你只需要调用它们，结果会写入日志文件。
 
 使用中文思考和回复。"""
 
