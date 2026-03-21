@@ -38,7 +38,7 @@ class VsockServer:
     def __init__(
         self,
         port: int = DEFAULT_PORT,
-        handler: Optional[Callable[..., [dict[str, Any]], dict[str, Any]]] = None,
+        handler: Optional[Callable[[dict[str, Any]], dict[str, Any]]] = None,
     ) -> None:
         """
         初始化 vsock 服务端

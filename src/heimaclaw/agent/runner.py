@@ -7,6 +7,15 @@ Agent 运行器模块
 # DeepAgents 历史消息限制（避免 context 膨胀导致超时）
 MAX_DEEPAGENTS_HISTORY = 20
 
+# 配置日志文件
+import os
+from pathlib import Path
+_log_dir = Path.home() / ".heimaclaw" / "logs"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = _log_dir / "agent.log"
+from heimaclaw.console import configure_logging
+configure_logging(str(_log_file), enabled=True)
+
 import json
 from typing import Any, Optional
 
@@ -477,6 +486,11 @@ class AgentRunner:
             self._sandbox_instance_id = instance.instance_id
 
         info(f"沙箱实例已创建: {self._sandbox_instance_id}")
+
+        # 将沙箱上下文传递给工具注册表
+        from heimaclaw.agent.tools import get_tool_registry
+        tool_registry = get_tool_registry()
+        tool_registry.set_sandbox_context(self.sandbox_backend, self._sandbox_instance_id)
 
     async def _initialize_llm(self) -> None:
         """初始化 LLM 适配器"""

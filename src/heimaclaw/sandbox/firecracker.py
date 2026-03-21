@@ -232,7 +232,7 @@ class FirecrackerBackend(SandboxBackend):
         config = {
             "boot-source": {
                 "kernel_image_path": self.kernel_path,
-                "boot_args": "console=ttyS0 reboot=k panic=1 pci=off",
+                "boot_args": "console=ttyS0 reboot=k panic=1",
             },
             "drives": [
                 {
@@ -436,6 +436,7 @@ class FirecrackerBackend(SandboxBackend):
 
         except asyncio.TimeoutError:
             process.kill()
+            await process.wait()
             return ExecutionResult(
                 exit_code=-1,
                 stdout="",
@@ -473,6 +474,21 @@ class FirecrackerBackend(SandboxBackend):
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.settimeout(timeout_ms / 1000)
             sock.connect(str(vsock_path))
+
+            # Firecracker vsock 握手协议
+            # 1. 发送 CONNECT 命令
+            sock.sendall(b"CONNECT 1234\n")
+            
+            # 2. 等待握手响应
+            handshake_resp = b""
+            while b"\n" not in handshake_resp:
+                chunk = sock.recv(1)
+                if not chunk:
+                    raise ConnectionError("vsock 握手失败: 连接已关闭")
+                handshake_resp += chunk
+            
+            if not handshake_resp.startswith(b"OK"):
+                raise ConnectionError(f"vsock 握手失败: {handshake_resp.decode(errors='replace')}")
 
             # 构建请求
             request = {
@@ -530,15 +546,11 @@ class FirecrackerBackend(SandboxBackend):
                     stderr=response.get("error", "执行失败"),
                     duration_ms=duration_ms,
                 )
-
         except Exception as e:
-            # vsock 通信失败，降级
-            return ExecutionResult(
-                exit_code=1,
-                stdout="",
-                stderr=f"vsock 通信失败: {e}",
-                duration_ms=int((time.time() - start_time) * 1000),
-            )
+            # vsock 通信失败，真正降级到本地执行
+            from heimaclaw.console import info
+            info(f"[FirecrackerBackend] vsock 通信失败 ({e})，自动降级到本地执行...")
+            return await self._execute_fallback(command, timeout_ms)
 
     async def get_instance(self, instance_id: str) -> Optional[InstanceInfo]:
         """获取实例信息"""

@@ -34,6 +34,15 @@ class ToolRegistry:
     def __init__(self):
         """初始化工具注册表"""
         self._tools: dict[str, RegisteredTool] = {}
+        # 沙箱上下文
+        self.sandbox_backend = None
+        self.sandbox_instance_id = None
+
+    def set_sandbox_context(self, backend, instance_id):
+        """设置沙箱上下文"""
+        self.sandbox_backend = backend
+        self.sandbox_instance_id = instance_id
+        info(f"工具注册表已绑定沙箱: {instance_id}")
 
     def register(
         self,
