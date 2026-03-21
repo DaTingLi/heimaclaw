@@ -149,6 +149,9 @@ class EventBus:
         # 索引文件路径
         self.index_file = self.base_dir / "index.json"
 
+        # 异步监听器映射：listener_id -> callback
+        self._async_listeners: dict[str, Callable] = {}
+
         # 确保索引文件存在
         if not self.index_file.exists():
             self._save_index({})
@@ -306,3 +309,72 @@ class EventBus:
         if "last_read" in index and agent_id in index["last_read"]:
             index["last_read"][agent_id].pop(f"by_{subscriber_id}", None)
             self._save_index(index)
+
+
+# 添加异步监听器支持
+
+    def add_async_listener(self, listener_id: str, callback):
+        """
+        添加异步监听器
+        
+        Args:
+            listener_id: 监听器唯一 ID
+            callback: 回调函数（可以是异步的）
+        """
+        self._async_listeners = getattr(self, '_async_listeners', {})
+        if listener_id not in self._async_listeners:
+            self._async_listeners[listener_id] = callback
+            print(f"[EventBus] 添加监听器: {listener_id}")
+    
+    def remove_listener(self, listener_id: str):
+        """移除监听器"""
+        self._async_listeners = getattr(self, '_async_listeners', {})
+        if listener_id in self._async_listeners:
+            del self._async_listeners[listener_id]
+            print(f"[EventBus] 移除监听器: {listener_id}")
+    
+    def get_async_listener_ids(self) -> list:
+        """获取所有监听器 ID"""
+        self._async_listeners = getattr(self, '_async_listeners', {})
+        return list(self._async_listeners.keys())
+    
+    async def emit(self, event: Event):
+        """
+        发射事件
+        
+        1. 持久化到 JSONL 文件
+        2. 通知所有订阅者（包括异步监听器）
+        """
+        # 调试日志
+        print(f"[EventBus DEBUG] emit called: type={event.type.value}, agent_id={event.agent_id}")
+        print(f"[EventBus DEBUG] _async_listeners id={id(self._async_listeners)}, keys={list(self._async_listeners.keys())}")
+        
+        # 确定写入哪个 Agent 的事件文件
+        agent_id = event.agent_id or "main"
+        event_file = self._get_event_file(agent_id)
+
+        # 异步写入 JSONL
+        async with aiofiles.open(event_file, mode="a") as f:
+            await f.write(json.dumps(event.to_dict()) + "\n")
+
+        # 通知订阅者（原有逻辑）
+        for callback in self._subscribers.get(agent_id, []):
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(event)
+                else:
+                    callback(event)
+            except Exception as e:
+                print(f"EventBus subscriber error: {e}")
+        
+        # 通知异步监听器（新增）
+        print(f"[EventBus DEBUG] 准备通知 {len(self._async_listeners)} 个异步监听器")
+        for listener_id, callback in self._async_listeners.items():
+            print(f"[EventBus DEBUG]   -> 通知监听器: {listener_id}")
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(event)
+                else:
+                    callback(event)
+            except Exception as e:
+                print(f"EventBus async listener error: {e}")

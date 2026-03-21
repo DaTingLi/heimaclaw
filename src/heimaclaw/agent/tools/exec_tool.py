@@ -62,19 +62,15 @@ class ExecTool:
             }
         
         # 拦截 claude/gemini 等交互式命令，自动后台执行
-        import re
         cmd_lower = command.lower().strip()
-        block_patterns = [r"^claude", r"^gemini"]
+        block_patterns = [r"^claude", r"^gemini"]
         if any(re.search(p, cmd_lower) for p in block_patterns):
-            # 追加 --yes 标志并后台执行
             if not command.strip().endswith("--yes") and not command.strip().endswith("&"):
                 safe_cmd = f"{command.rstrip()} --yes"
             else:
                 safe_cmd = command
-            # 重定向到日志文件
             log_file = "./heimaclaw_workspace/cli_agent.log"
             safe_cmd = f"nohup {safe_cmd} > {log_file} 2>&1 &"
-            info(f"[EXEC] claude/gemini 命令已后台化: {safe_cmd}")
             command = safe_cmd
 
         try:
@@ -84,7 +80,7 @@ class ExecTool:
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr= asyncio.subprocess.PIPE,
                 cwd=str(work_dir),
                 env={
                     **os.environ,
@@ -121,11 +117,42 @@ class ExecTool:
             return {"success": False, "error": str(e), "output": "", "exit_code": -1}
 
 
-# 同步包装器（供 ToolRegistry 调用）
 async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> str:
     """exec 工具的处理函数"""
-    # 记录执行的命令
-    print(f"[EXEC] 执行命令: {command[:200]}")
+    from heimaclaw.agent.tools import get_tool_registry
+    
+    registry = get_tool_registry()
+    
+    # 优先使用沙箱执行
+    if registry.sandbox_backend and registry.sandbox_instance_id:
+        try:
+            # 准备环境变量
+            auth_env = {
+                k: os.environ[k] 
+                for k in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"] 
+                if k in os.environ
+            }
+            
+            # 通过沙箱执行
+            result = await registry.sandbox_backend.execute(
+                instance_id=registry.sandbox_instance_id,
+                command=command,
+                timeout_ms=timeout * 1000,
+            )
+            
+            print(f"[EXEC-SANDBOX] 在沙箱 {registry.sandbox_instance_id} 执行: {command[:100]}...")
+            
+            if result.exit_code == 0:
+                return result.stdout
+            else:
+                return f"[沙箱错误 {result.exit_code}]\n{result.stderr}\n{result.stdout}"
+                
+        except Exception as e:
+            print(f"[EXEC-SANDBOX] 沙箱执行失败，回退到本地: {e}")
+            # Fallback 到本地执行
+    
+    # 本地执行 (Fallback)
+    print(f"[EXEC-LOCAL] 执行命令: {command[:200]}")
     
     tool = ExecTool()
     result = await tool.execute(command, timeout, cwd)

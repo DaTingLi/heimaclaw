@@ -1,3 +1,4 @@
+import asyncio
 """
 OpenAI 兼容适配器
 
@@ -100,7 +101,7 @@ class OpenAICompatibleAdapter(LLMAdapter):
         **kwargs: Any,
     ) -> LLMResponse:
         """
-        发送对话请求
+        发送对话请求（带自动重试）
 
         参数:
             messages: 消息列表
@@ -119,20 +120,46 @@ class OpenAICompatibleAdapter(LLMAdapter):
         headers = self._get_headers()
         body = self._build_request_body(messages, **kwargs)
 
-        try:
-            client = await self._get_client()
-            response = await client.post(url, headers=headers, json=body)
-            response.raise_for_status()
+        # 重试配置
+        max_retries = 3
+        retry_delay = 2.0
 
-            data = response.json()
-            return self._parse_response(data, start_time)
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                client = await self._get_client()
+                response = await client.post(url, headers=headers, json=body)
+                
+                # 500 错误需要重试
+                if response.status_code >= 500:
+                    last_error = f"Server error {response.status_code}"
+                    if attempt < max_retries - 1:
+                        error(f"LLM API 服务器错误 ({response.status_code})，{retry_delay}秒后重试...")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                        continue
+                
+                response.raise_for_status()
+                data = response.json()
+                return self._parse_response(data, start_time)
 
-        except httpx.HTTPStatusError as e:
-            error(f"LLM API 请求失败: {e.response.status_code}")
-            raise
-        except Exception as e:
-            error(f"LLM API 请求异常: {e}")
-            raise
+            except httpx.HTTPStatusError as e:
+                error(f"LLM API 请求失败: {e.response.status_code}")
+                raise
+            except asyncio.TimeoutError:
+                last_error = "Request timeout"
+                if attempt < max_retries - 1:
+                    error(f"LLM API 超时，{retry_delay}秒后重试...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                raise
+            except Exception as e:
+                error(f"LLM API 请求异常: {e}")
+                raise
+
+        # 所有重试都失败
+        raise Exception(f"LLM API 请求失败，已重试 {max_retries} 次。最后错误: {last_error}")
 
     async def chat_stream(
         self,

@@ -162,6 +162,18 @@ class ConfigCompiler:
     def _generate_system_prompt(self, markdown_config: dict[str, Any]) -> str:
         """生成系统提示"""
         prompts = []
+        
+        # 加载 AGENTS.md（如果有）
+        agents_md_path = self.agents_dir / "AGENTS.md"
+        if agents_md_path.exists():
+            try:
+                agents_content = agents_md_path.read_text(encoding="utf-8")
+                # 只取关键部分（前 2000 字符）
+                if len(agents_content) > 2000:
+                    agents_content = agents_content[:2000] + "\n...\n(内容过长已截断)"
+                prompts.append(agents_content)
+            except Exception:
+                pass
 
         # 身份信息
         if "identity" in markdown_config:
@@ -203,13 +215,22 @@ class ConfigCompiler:
                 for key, value in user["preferences"].items():
                     prompts.append(f"- {key}: {value}")
 
-        # 添加 write_todos 使用指南
+        # 添加记忆和任务规划指南
+        prompts.append("\n\n## 记忆规则")
+        prompts.append("重要：你有义务记住用户告诉你的信息，并在适当时机更新记忆：")
+        prompts.append("- 用户说「记住...」「以后都...」时，立即调用 update_memory")
+        prompts.append("- 完成重要决策 → 记录到 memory")
+        prompts.append("- 遇到错误但解决 → 记录解决方案")
+        prompts.append("- 绝不能存储 API Keys、密码等敏感信息")
+        prompts.append("- 开始任务前可以调用 read_memory 查看已记住的信息")
+
         prompts.append("\n\n## 任务规划指南")
         prompts.append("对于复杂任务，你应该使用 write_todos 工具创建和管理任务列表：")
         prompts.append("- 复杂多步骤任务（>=3步）必须使用 write_todos")
         prompts.append("- 任务状态：pending（待处理）、in_progress（进行中）、completed（已完成）")
         prompts.append("- 开始任务前立即标记为 in_progress")
         prompts.append("- 完成任务后立即标记为 completed")
+        prompts.append("- 长时间运行的服务必须后台执行（nohup + &）")
 
         return "\n".join(prompts)
 

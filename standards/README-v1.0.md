@@ -9,6 +9,7 @@
    - PROJECT-STATUS.md
    - PROJECT-DECISION-LOG.md（最近5条）
    - KNOWLEDGE-CHECK-CHECKLIST.md 回答
+   - CLI-COMMANDS-v1.0.md（终端命令清单）
 
 支持扩展为“子模块工厂”模式（可选）：
 - 可自行实现 project-cli submodule create <name>
