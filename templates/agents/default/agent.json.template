@@ -1,0 +1,24 @@
+{
+  "name": "default",
+  "description": "默认 Agent",
+  "display_name": "heimaclaw",
+  "channel": "feishu",
+  "enabled": true,
+  "feishu": {
+    "app_id": "",
+    "app_secret": ""
+  },
+  "llm": {
+    "provider": "openai",
+    "model_name": "glm-5",
+    "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "api_key": "",
+    "temperature": 0.7,
+    "max_tokens": 4096
+  },
+  "sandbox": {
+    "enabled": true,
+    "memory_mb": 128,
+    "cpu_count": 1
+  }
+}

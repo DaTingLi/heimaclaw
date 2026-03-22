@@ -76,4 +76,4 @@ config/config.toml
 config/*.toml
 -e 
 # User agents config (local only - contains secrets)
-agents/
+# agents/  (use templates/agents for distribution)
