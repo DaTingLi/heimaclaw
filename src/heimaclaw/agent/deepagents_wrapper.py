@@ -113,9 +113,13 @@ class DeepAgentsWrapper:
         if history:
             messages.extend(history)
         
+        # 【关键】在用户消息前加强身份约束，防止模型忽略 system prompt
+        identity_prefix = f"[重要身份规则：你的名字是 {self.agent_name}，不是 HeimaClaw或其他名字。你必须以你的真实名字自我介绍。]"
+        enhanced_message = f"{identity_prefix}\n\n{user_message}"
+        
         # 添加当前用户消息
         if user_message:
-            messages.append(("human", user_message))
+            messages.append(("human", enhanced_message))
             
         try:
             print(f"[DeepAgentsWrapper.execute] 调用 _agent.invoke, messages长度={len(messages)}", flush=True, file=sys.stderr)
