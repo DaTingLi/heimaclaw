@@ -223,6 +223,69 @@ def _create_default_config(config_path: "Path") -> None:
     with open(config_path, "wb") as f:
         tomli_w.dump(default_config, f)
 
+# ==================== install 命令 ====================
+
+
+@app.command("install")
+def install_command(
+    force: bool = typer.Option(False, "--force", "-f", help="强制覆盖已存在的配置"),
+) -> None:
+    """
+    自动安装 HeiMaClaw（创建目录、复制模板、初始化配置）
+    """
+    import shutil
+    from pathlib import Path
+    
+    title("HeiMaClaw 安装向导")
+    
+    source_dir = Path(__file__).parent.parent.parent
+    install_config_dir = Path("/opt/heimaclaw/config")
+    agents_dir = Path.home() / ".heimaclaw" / "agents"
+    
+    info("[1/4] 创建目录结构...")
+    install_config_dir.mkdir(parents=True, exist_ok=True)
+    Path.home() / ".heimaclaw".mkdir(parents=True, exist_ok=True)
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    success("  目录创建完成")
+    
+    info("[2/4] 初始化全局配置...")
+    config_template = source_dir / "config" / "config.toml.template"
+    config_target = install_config_dir / "config.toml"
+    if config_target.exists() and not force:
+        info("  全局配置已存在 (跳过)")
+    else:
+        if config_template.exists():
+            shutil.copy(config_template, config_target)
+        success(f"  全局配置已创建: {config_target}")
+    
+    info("[3/4] 创建默认 Agent...")
+    default_agent_target = agents_dir / "default" / "agent.json"
+    if default_agent_target.exists() and not force:
+        info("  默认 Agent 已存在 (跳过)")
+    else:
+        default_agent_target.parent.mkdir(parents=True, exist_ok=True)
+        agent_json = '{"name":"default","display_name":"heimaclaw","channel":"feishu","enabled":true,"feishu":{"app_id":"","app_secret":""},"llm":{"provider":"openai","model_name":"glm-5","base_url":"https://open.bigmodel.cn/api/coding/paas/v4","api_key":"","temperature":0.7,"max_tokens":4096},"sandbox":{"enabled":true,"memory_mb":128,"cpu_count":1}}'
+        default_agent_target.write_text(agent_json)
+        success(f"  默认 Agent 已创建: {default_agent_target}")
+    
+    info("[4/4] 设置权限...")
+    import os
+    if config_target.exists():
+        os.chmod(config_target, 0o600)
+    if default_agent_target.exists():
+        os.chmod(default_agent_target, 0o600)
+    success("  权限设置完成 (600)")
+    
+    from rich.panel import Panel
+    console.print(Panel(
+        "安装完成！\n\n"
+        "下一步操作:\n"
+        "1. 编辑配置: heimaclaw config edit\n"
+        "2. 启动服务: heimaclaw start --feishu --multi-process",
+        title="安装成功", style="green"
+    ))
+
+
 
 # ==================== start 命令 ====================
 
