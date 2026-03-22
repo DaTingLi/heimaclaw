@@ -417,13 +417,35 @@ def status_command() -> None:
 
     console.print(table)
 
-    # 渠道状态
+    # 渠道状态 - 读取真实配置
+    from pathlib import Path
+    import tomli
+    
     channel_table = Table(title="渠道状态", show_header=True, header_style="cyan bold")
     channel_table.add_column("渠道")
     channel_table.add_column("状态")
     channel_table.add_column("配置")
-
-    channel_table.add_row("飞书", "[yellow]未配置[/yellow]", "-")
+    
+    # 读取配置
+    config_path = Path("/opt/heimaclaw/config/config.toml")
+    if not config_path.exists():
+        config_path = Path.home() / ".heimaclaw" / "config.toml"
+    
+    feishu_status = "[yellow]未配置[/yellow]"
+    feishu_config = "-"
+    
+    if config_path.exists():
+        try:
+            with open(config_path, "rb") as f:
+                config = tomli.load(f)
+            feishu = config.get("channels", {}).get("feishu", {})
+            if feishu.get("app_id"):
+                feishu_status = "[green]已配置[/green]"
+                feishu_config = feishu.get("app_id", "-")[:15] + "..."
+        except Exception:
+            pass
+    
+    channel_table.add_row("飞书", feishu_status, feishu_config)
     channel_table.add_row("企业微信", "[yellow]未配置[/yellow]", "-")
 
     console.print(channel_table)
