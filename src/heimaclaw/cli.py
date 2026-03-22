@@ -350,9 +350,14 @@ def start_command(
             from heimaclaw.feishu_multiprocess import start_service, stop_service
             import signal
             
+            # 写入 PID 文件
+            pid_file.write_text(str(os.getpid()))
+            
             # 注册信号处理
             def signal_handler(sig, frame):
                 info("收到停止信号...")
+                if pid_file.exists():
+                    pid_file.unlink()
                 stop_service()
                 sys.exit(0)
             
@@ -401,19 +406,53 @@ def status_command() -> None:
 
     包括服务状态、Agent 数量、沙箱池状态等。
     """
+    from pathlib import Path  # 确保 Path 可用
+    import os
+    
     title("HeiMaClaw 状态")
 
+    # 读取 PID 文件判断服务状态
+    run_dir = Path("/opt/heimaclaw/run")
+    pid_file = run_dir / "heimaclaw.pid"
+    
+    service_status = "[yellow]未启动[/yellow]"
+    service_detail = "-"
+    sandbox_status = "[yellow]未初始化[/yellow]"
+    active_agents = "[dim]0[/dim]"
+    active_sessions = "[dim]0[/dim]"
+    
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            import os
+            if os.path.exists(f"/proc/{pid}"):
+                service_status = "[green]运行中[/green]"
+                service_detail = f"PID: {pid}"
+            else:
+                service_status = "[red]已停止[/red]"
+                service_detail = "PID 文件过期"
+        except Exception:
+            service_status = "[red]错误[/red]"
+            service_detail = "PID 文件损坏"
+    
+    # 读取 Agent 列表获取活跃 Agent 数量
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
+    if agents_dir.exists():
+        agent_count = sum(1 for d in agents_dir.iterdir() if d.is_dir() and (d / "agent.json").exists())
+        active_agents = f"[green]{agent_count}[/green]"
+    
     # 服务状态
     table = Table(title="服务状态", show_header=True, header_style="cyan bold")
     table.add_column("项目")
     table.add_column("状态")
     table.add_column("详情")
-
-    table.add_row("服务", "[yellow]未启动[/yellow]", "-")
-    table.add_row("沙箱后端", "[yellow]未初始化[/yellow]", "-")
+    table.add_row("服务", service_status, service_detail)
+    table.add_row("沙箱后端", sandbox_status, "-")
     table.add_row("预热池", "[dim]0 / 5[/dim]", "-")
-    table.add_row("活跃 Agent", "[dim]0[/dim]", "-")
-    table.add_row("活跃会话", "[dim]0[/dim]", "-")
+    table.add_row("活跃 Agent", active_agents, "-")
+    table.add_row("活跃会话", active_sessions, "-")
 
     console.print(table)
 
