@@ -182,10 +182,12 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                         elif "image_key" in content_obj:
                             content_text = "[收到一张图片]"
                             image_key = content_obj.get("image_key")
+                            info(f"[DEBUG] 收到图片消息 image_key={image_key}")
                             if image_key:
                                 if not hasattr(msg, 'image_keys'):
                                     msg.image_keys = []
                                 msg.image_keys.append(image_key)
+                                info(f"[DEBUG] msg.image_keys 追加后={msg.image_keys}")
                         elif "media_key" in content_obj:
                             content_text = "[收到一个富媒体(视频/音频)文件]"
                         else:
@@ -212,6 +214,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                 chat_type = "group" if (msg.chat_id and msg.chat_id.startswith("oc_")) else "p2p"
 
             # 创建消息对象
+            # 【关键修复】传递 image_keys（飞书图片需要通过 image_key 下载）
             inbound_msg = InboundMessage(
                 message_id=message_id,
                 chat_id=msg.chat_id or "",
@@ -223,6 +226,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                 mentions=mention_names,
                 timestamp=time.time(),
                 raw_data={"event": data.event, "content_obj": content_obj},
+                image_keys=getattr(msg, 'image_keys', []),
             )
 
             # 回调处理 - Fire-and-Forget 模式（不阻塞）

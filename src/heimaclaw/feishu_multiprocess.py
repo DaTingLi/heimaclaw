@@ -142,6 +142,7 @@ class FeishuWorker(mp.Process):
             "app_id": self.agent_info.app_id,
             "app_secret": self.agent_info.app_secret,
         })
+        self._ws_adapter = adapter  # 保存引用用于下载图片
 
         # 创建消息处理器
         async def message_handler(message: InboundMessage) -> None:
@@ -182,7 +183,11 @@ class FeishuWorker(mp.Process):
                                                 prompt="请描述这张图片的内容",
                                                 agent_id=self.agent_info.name
                                             )
-                                            image_descriptions.append(f"[图片描述: {desc}]")
+                                            info(f"[DEBUG] Vision 返回描述: '{desc}' (长度={len(desc) if desc else 0})")
+                                            if desc and desc.strip():
+                                                image_descriptions.append(f"[图片描述: {desc.strip()}]")
+                                            else:
+                                                image_descriptions.append("[图片无法识别]")
                                             os.remove(tmp_path)
                                         else:
                                             image_descriptions.append("[图片下载失败]")
@@ -203,6 +208,7 @@ class FeishuWorker(mp.Process):
                                     image_descriptions.append(f"[图片理解失败: {str(e)[:50]}]")
                             
                             if image_descriptions:
+                                info(f"[DEBUG] Vision image_descriptions: {image_descriptions}")
                                 content = "\n".join(image_descriptions) + "\n" + content
                                 info(f"[Worker {self.agent_info.name}] 已理解 {len(image_descriptions)} 张图片")
                         except Exception as e:
@@ -250,11 +256,11 @@ class FeishuWorker(mp.Process):
                 # 因为同一个用户可能使用多个飞书机器人 App
                 session_id = f"{message.user_id}_{self.agent_info.app_id}"
                 
-                # 处理消息
+                # 处理消息（使用经过视觉处理的 content，不是原始 message.content）
                 response = await runner.process_message(
                     user_id=message.user_id,
                     channel=ChannelType.FEISHU,
-                    content=message.content,
+                    content=content,
                     session_id=session_id,
                 )
                 
