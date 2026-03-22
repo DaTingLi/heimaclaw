@@ -111,10 +111,15 @@ class FeishuWebSocketAdapter(ChannelAdapter):
 
         info("飞书 WebSocket 连接启动中...")
 
-        # 在单独的线程中运行 WebSocket
+        # 在单独的线程中运行 WebSocket，每个连接使用独立的 event loop
         def run_ws():
             try:
-                self._ws_client.start()
+                import asyncio
+                # 为这个连接创建独立的 event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                # 运行事件循环来处理 WebSocket
+                loop.run_until_complete(self._ws_client.start())
             except Exception as e:
                 error(f"飞书 WebSocket 异常: {e}")
 
@@ -161,6 +166,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
 
             # 解析消息内容
             content = msg.content
+            content_obj = {}
             if isinstance(content, str):
                 try:
                     content_obj = json.loads(content)
@@ -169,9 +175,14 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                     # 如果没有文本，可能是文件或图片
                     if not content_text:
                         if "file_key" in content_obj:
-                            content_text = f"[收到文件: {content_obj.get('file_name', 'unknown')}]"
+                            if "media_key" in content_obj or "video_key" in content_obj:
+                                content_text = f"[收到视频/音频文件: {content_obj.get('file_name', 'unknown')}]"
+                            else:
+                                content_text = f"[收到文件: {content_obj.get('file_name', 'unknown')}]"
                         elif "image_key" in content_obj:
                             content_text = "[收到一张图片]"
+                        elif "media_key" in content_obj:
+                            content_text = "[收到一个富媒体(视频/音频)文件]"
                         else:
                             content_text = "[收到一条非文本消息]"
                 except Exception:
@@ -206,7 +217,7 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                 chat_type=chat_type,
                 mentions=mention_names,
                 timestamp=time.time(),
-                raw_data={"event": data.event},
+                raw_data={"event": data.event, "content_obj": content_obj},
             )
 
             # 回调处理 - Fire-and-Forget 模式（不阻塞）
@@ -439,6 +450,48 @@ class FeishuWebSocketAdapter(ChannelAdapter):
 
         except Exception as e:
             error(f"移除 Typing Indicator 异常: {e}")
+            return False
+
+    
+    async def download_resource(self, message_id: str, file_key: str, resource_type: str, save_path: str) -> bool:
+        """
+        下载消息中的图片或文件资源
+        
+        参数:
+            message_id: 消息ID
+            file_key: 文件/图片KEY
+            resource_type: 资源类型 'image' 或 'file'
+            save_path: 保存的本地路径
+            
+        返回:
+            是否成功
+        """
+        try:
+            from lark_oapi.api.im.v1 import GetMessageResourceRequest
+            
+            request = (
+                GetMessageResourceRequest.builder()
+                .message_id(message_id)
+                .file_key(file_key)
+                .type(resource_type)
+                .build()
+            )
+            
+            response = self.client.im.v1.message_resource.get(request)
+            
+            if response.success():
+                import os
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                with open(save_path, "wb") as f:
+                    f.write(response.file.read())
+                info(f"资源下载成功: {save_path}")
+                return True
+            else:
+                error(f"资源下载失败: {response.code} - {response.msg}")
+                return False
+                
+        except Exception as e:
+            error(f"下载资源异常: {e}")
             return False
 
     def _is_duplicate_message(self, message_id: str) -> bool:
