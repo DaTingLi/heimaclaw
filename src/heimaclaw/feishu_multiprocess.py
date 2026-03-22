@@ -114,12 +114,31 @@ class FeishuWorker(mp.Process):
         # 创建消息处理器
         async def message_handler(message: InboundMessage) -> None:
             try:
+                # 添加 Typing Indicator
+                typing_id = None
+                if message.message_id:
+                    try:
+                        typing_id = await adapter.add_typing_indicator(message.message_id)
+                    except Exception:
+                        pass
+                
+                # 确定 session_id（私聊用 user_id，群聊需要 session 管理）
+                session_id = message.user_id if message.chat_type != "group" else None
+                
                 # 处理消息
                 response = await runner.process_message(
                     user_id=message.user_id,
-                    channel=ChannelType.FEISHU,  # 飞书渠道
+                    channel=ChannelType.FEISHU,
                     content=message.content,
+                    session_id=session_id,
                 )
+                
+                # 移除 Typing Indicator
+                if typing_id:
+                    try:
+                        await adapter.remove_typing_indicator(typing_id)
+                    except Exception:
+                        pass
                 
                 # 发送响应
                 if response:
