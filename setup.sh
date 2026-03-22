@@ -8,19 +8,19 @@
 #============================================
 
 #========= LLM 配置 =========
-LLM_API_KEY="your_llm_api_key_here"
+LLM_API_KEY="7dea35ded52043a683b875bae5a31213.uXrxigWPdXxBQHo0"
 LLM_MODEL="glm-5"
 LLM_BASE_URL="https://open.bigmodel.cn/api/coding/paas/v4"
 
 #========= Vision 配置 =========
 VISION_ENABLED="false"
-VISION_API_KEY="your_vision_api_key_here"
+VISION_API_KEY=""
 VISION_MODEL="glm-4v"
 VISION_BASE_URL="https://open.bigmodel.cn/api/coding/paas/v4"
 
 #========= 飞书配置 =========
-FEISHU_APP_ID="your_feishu_app_id"
-FEISHU_APP_SECRET="your_feishu_app_secret"
+FEISHU_APP_ID="cli_a9301fec40395bde"
+FEISHU_APP_SECRET="EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
 
 #============================================
 # 以下内容不需要修改
@@ -43,11 +43,7 @@ fi
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "[1/5] 初始化配置文件..."
     mkdir -p "$(dirname $CONFIG_PATH)"
-    if [ -f "$SCRIPT_DIR/config/config.toml.template" ]; then
-        cp "$SCRIPT_DIR/config/config.toml.template" "$CONFIG_PATH"
-    else
-        cat > "$CONFIG_PATH" << 'EOF'
-# HeiMaClaw 配置文件
+    cat > "$CONFIG_PATH" << 'EOF'
 [llm]
 provider = "openai"
 model = "glm-5"
@@ -82,7 +78,6 @@ workers = 4
 level = "INFO"
 file = "/opt/heimaclaw/logs/heimaclaw.log"
 EOF
-    fi
     echo "  ✓ 配置文件已创建: $CONFIG_PATH"
 else
     echo "[1/5] 配置文件已存在，跳过初始化"

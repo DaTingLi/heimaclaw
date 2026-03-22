@@ -1,60 +1,33 @@
-# ============================================
-# HeiMaClaw 配置文件
-# ============================================
-# 安装后位于: /opt/heimaclaw/config/config.toml
-# 修改方式: 
-#   1. 直接编辑此文件
-#   2. 命令行: heimaclaw config set <key> <value>
-# ============================================
-
-# ============================================
-# 全局 LLM 配置
-# ============================================
 [llm]
 provider = "openai"
 model = "glm-5"
 base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
-api_key = ""                     # 【必填】API Key
+api_key = "7dea35ded52043a683b875bae5a31213.uXrxigWPdXxBQHo0"
 max_tokens = 4096
 temperature = 0.7
 
-# ============================================
-# 全局视觉理解配置
-# ============================================
 [vision]
 enabled = false
 model = "glm-4v"
-base_url = "https://open.bigmodel.cn/api/coding/paas/v4"  # 【可改】视觉模型 URL
-api_key = ""                     # 【如启用 Vision 必填】API Key
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
+api_key = ""
 timeout = 60
 max_retries = 3
 
-# ============================================
-# 飞书渠道配置
-# ============================================
 [channels.feishu]
-app_id = ""                      # 【必填】飞书 App ID
-app_secret = ""                  # 【必填】飞书 App Secret
+app_id = "cli_a9301fec40395bde"
+app_secret = "EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
 
-# ============================================
-# 沙箱配置
-# ============================================
 [sandbox]
 enabled = true
 memory_mb = 128
 cpu_count = 1
 
-# ============================================
-# 服务器配置
-# ============================================
 [server]
 host = "0.0.0.0"
 port = 8000
 workers = 4
 
-# ============================================
-# 日志配置
-# ============================================
 [logging]
 level = "INFO"
 file = "/opt/heimaclaw/logs/heimaclaw.log"
