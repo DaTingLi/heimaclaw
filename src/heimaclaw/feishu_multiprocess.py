@@ -82,22 +82,33 @@ class FeishuWorker(mp.Process):
 
     async def _run(self) -> None:
         """异步主循环"""
-        # 初始化全局视觉服务（如果启用）
+        # 初始化全局视觉服务（优先全局配置，Agent 可覆盖）
         from heimaclaw.vision import get_vision_service, VisionConfig
         from heimaclaw.config.loader import get_config
         
         config = get_config()
-        if hasattr(config, 'vision') and config.vision.enabled:
-            vision_cfg = config.vision
+        vision_cfg = getattr(config, 'vision', None) or VisionConfig()
+        
+        # Agent 级别的 vision 配置可以覆盖全局（如果 agent.json 中有 vision 字段）
+        agent_vision = self.agent_info.llm_config.get("vision", {})
+        if agent_vision:
+            vision_cfg.enabled = agent_vision.get("enabled", vision_cfg.enabled)
+            vision_cfg.model = agent_vision.get("model", vision_cfg.model)
+            vision_cfg.api_key = agent_vision.get("api_key", vision_cfg.api_key)
+            vision_cfg.base_url = agent_vision.get("base_url", vision_cfg.base_url)
+        
+        if vision_cfg.enabled and vision_cfg.api_key:
             get_vision_service().configure(VisionConfig(
                 enabled=True,
                 model=vision_cfg.model,
                 api_key=vision_cfg.api_key,
                 base_url=vision_cfg.base_url,
-                timeout=vision_cfg.timeout,
-                max_retries=vision_cfg.max_retries,
+                timeout=getattr(vision_cfg, 'timeout', 60),
+                max_retries=getattr(vision_cfg, 'max_retries', 3),
             ))
             info(f"[Worker {self.agent_info.name}] 全局视觉服务已启用，模型: {vision_cfg.model}")
+        elif vision_cfg.enabled and not vision_cfg.api_key:
+            warning(f"[Worker {self.agent_info.name}] 视觉服务已启用但未配置 API Key")
         
         # 创建 Agent
         session_manager = SessionManager(
