@@ -146,7 +146,7 @@ def init_channel_adapters() -> None:
             _channel_adapters["wecom"] = wecom_adapter
             info("企业微信适配器已配置")
     except Exception as e:
-        error(f"加载企业微信适配器失败: {e}")
+        warning(f"企业微信未配置或加载失败: {e}")
 
 
 @asynccontextmanager
