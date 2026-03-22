@@ -50,21 +50,20 @@ class FeishuWorker(mp.Process):
     每个进程独立运行一个 Feishu App + Agent Runner
     """
 
-    def __init__(self, agent_info: AgentInfo, shared_state: dict = None):
+    def __init__(self, agent_info: AgentInfo):
         super().__init__(daemon=True)
         self.agent_info = agent_info
-        self.shared_state = shared_state or {}
         self._running = mp.Value('i', 0)
-        self._event_loop = None
 
     def run(self) -> None:
         """在独立进程中运行"""
+        import asyncio
+        
         info(f"[Worker {self.agent_info.name}] 启动，App ID: {self.agent_info.app_id[:10]}...")
 
         # 创建独立的 event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        self._event_loop = loop
         self._running.value = 1
 
         try:
@@ -154,8 +153,14 @@ class MultiProcessFeishuService:
 
     def __init__(self):
         self.workers: dict[str, FeishuWorker] = {}
-        self.manager = mp.Manager()
-        self.shared_state = self.manager.dict()
+        self._manager = None
+        self._shared_state = None
+
+    def _init_manager(self):
+        """延迟初始化 Manager"""
+        if self._manager is None:
+            self._manager = mp.Manager()
+            self._shared_state = self._manager.dict()
 
     def _load_agent_configs(self) -> list[AgentInfo]:
         """加载所有 Agent 配置"""
@@ -239,7 +244,7 @@ class MultiProcessFeishuService:
                 continue
 
             # 创建并启动 Worker
-            worker = FeishuWorker(agent_info, self.shared_state)
+            worker = FeishuWorker(agent_info)
             worker.start()
             self.workers[agent_info.name] = worker
             info(f"Worker {agent_info.name} 已启动 (PID: {worker.pid})")

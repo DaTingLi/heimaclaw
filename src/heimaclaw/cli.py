@@ -135,8 +135,45 @@ def init_command(
     else:
         warning("  配置已存在，跳过: config/config.toml")
 
+    
+    # 创建默认 Agent
+    init_default_agent(project_path)
+    success("  创建默认 Agent: default")
+    
     success(f"初始化完成: {project_path}")
     info("下一步: 运行 'heimaclaw config show' 查看配置")
+
+
+
+def init_default_agent(project_path: "Path") -> None:
+    """创建全局默认的 Agent"""
+    import json
+    agents_dir = project_path / "data" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    
+    default_agent_dir = agents_dir / "default"
+    default_agent_dir.mkdir(parents=True, exist_ok=True)
+    
+    config = {
+        "name": "default",
+        "description": "系统默认的全局 Agent，支持多模态（需配置 glm-4v 等大模型）",
+        "enabled": True,
+        "llm": {
+            "provider": "zhipu",
+            "model_name": "glm-4v",
+            "api_key": "de4e3dc9f9d14c75bb2b4a38df59b2b9.CuO0DXKvTfYWVhVu",
+            "temperature": 0.7,
+            "max_tokens": 8192
+        },
+        "sandbox": {
+            "enabled": False
+        }
+    }
+    
+    config_file = default_agent_dir / "agent.json"
+    if not config_file.exists():
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
 
 
 def _create_default_config(config_path: "Path") -> None:
@@ -197,7 +234,9 @@ def start_command(
     workers: int = typer.Option(1, "--workers", "-w", help="工作进程数"),
     reload: bool = typer.Option(False, "--reload", help="开发模式自动重载"),
     feishu: bool = typer.Option(True, "--feishu/--no-feishu", help="启动飞书服务"),
+    multi_process: bool = typer.Option(False, "--multi-process/--single-process", help="多进程模式（每个 App 独立进程）"),
     http: bool = typer.Option(True, "--http/--no-http", help="启动 HTTP API 服务"),
+    daemon: bool = typer.Option(False, "--daemon", "-d", help="后台守护进程模式运行"),
 ) -> None:
     """
     启动 HeiMaClaw 服务
@@ -210,10 +249,74 @@ def start_command(
         heimaclaw start --feishu         # 只启动飞书服务
         heimaclaw start --http           # 只启动 HTTP 服务
         heimaclaw start --reload         # 开发模式（代码自动重载）
+        heimaclaw start --daemon         # 后台守护进程模式运行
     """
+    import os
     import threading
+    from pathlib import Path
+    
+    # PID 文件路径
+    run_dir = Path("/opt/heimaclaw/run")
+    if not run_dir.exists():
+        try:
+            run_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            run_dir = Path.home() / ".heimaclaw" / "run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            
+    pid_file = run_dir / "heimaclaw.pid"
+    
+    if pid_file.exists():
+        try:
+            old_pid = int(pid_file.read_text().strip())
+            # 检查进程是否存在
+            os.kill(old_pid, 0)
+            error(f"HeiMaClaw 服务已在运行 (PID: {old_pid})")
+            raise typer.Exit(1)
+        except (ValueError, OSError):
+            # 进程不存在或 PID 文件损坏，清理无效的 PID 文件
+            pid_file.unlink()
+
+    if daemon:
+        title("启动 HeiMaClaw 服务 (后台模式)")
+        import subprocess
+        import sys
+        
+        # 准备新进程的命令
+        cmd = [sys.executable, "-m", "heimaclaw.cli", "start"]
+        if host != "0.0.0.0": cmd.extend(["--host", host])
+        if port != 8000: cmd.extend(["--port", str(port)])
+        if workers != 1: cmd.extend(["--workers", str(workers)])
+        if reload: cmd.append("--reload")
+        if not feishu: cmd.append("--no-feishu")
+        if not http: cmd.append("--no-http")
+        
+        log_dir = Path("/opt/heimaclaw/logs")
+        if not log_dir.exists():
+            log_dir = Path.home() / ".heimaclaw" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            
+        out_log = open(log_dir / "heimaclaw.out", "a")
+        err_log = open(log_dir / "heimaclaw.err", "a")
+        
+        # 启动子进程
+        process = subprocess.Popen(
+            cmd,
+            stdout=out_log,
+            stderr=err_log,
+            start_new_session=True  # 脱离当前终端
+        )
+        
+        pid_file.write_text(str(process.pid))
+        success(f"HeiMaClaw 服务已在后台启动，PID: {process.pid}")
+        info(f"输出日志: {out_log.name}")
+        info(f"错误日志: {err_log.name}")
+        return
 
     title("启动 HeiMaClaw 服务")
+    
+    # 写入当前 PID
+    pid_file.write_text(str(os.getpid()))
 
     info(f"HTTP API: {'启用' if http else '禁用'} (端口 {port})")
     info(f"飞书长连接: {'启用' if feishu else '禁用'}")
@@ -240,11 +343,35 @@ def start_command(
         """启动飞书长连接服务"""
         if not feishu:
             return
-        import asyncio
-
-        from heimaclaw.feishu_ws_server import main as feishu_main
-
-        asyncio.run(feishu_main())
+        
+        if multi_process:
+            # 多进程模式
+            info("使用多进程飞书服务架构")
+            from heimaclaw.feishu_multiprocess import start_service, stop_service
+            import signal
+            
+            # 注册信号处理
+            def signal_handler(sig, frame):
+                info("收到停止信号...")
+                stop_service()
+                sys.exit(0)
+            
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+            
+            # 启动服务（阻塞）
+            service = start_service()
+            try:
+                while True:
+                    import time
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                stop_service()
+        else:
+            # 单进程模式（原有逻辑）
+            import asyncio
+            from heimaclaw.feishu_ws_server import main as feishu_main
+            asyncio.run(feishu_main())
 
     try:
         if feishu and http:
@@ -542,89 +669,6 @@ def config_edit() -> None:
 # ==================== agent 子命令 ====================
 
 
-@agent_app.command("create")
-def agent_create(
-    name: str = typer.Argument(..., help="Agent 名称"),
-    channel: str = typer.Option(
-        "feishu",
-        "--channel",
-        "-c",
-        help="渠道类型: feishu / wecom",
-    ),
-    description: str = typer.Option(
-        "",
-        "--description",
-        "-d",
-        help="Agent 描述",
-    ),
-) -> None:
-    """
-    创建新的 Agent
-
-    创建一个独立的 Agent 配置和运行环境。
-    """
-    import json
-    from pathlib import Path
-
-    if channel not in ("feishu", "wecom"):
-        error(f"不支持的渠道类型: {channel}")
-        raise typer.Exit(1)
-
-    title(f"创建 Agent: {name}")
-
-    # Agent 配置目录
-    agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path.home() / ".heimaclaw" / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
-
-    agent_dir = agents_dir / name
-
-    if agent_dir.exists():
-        error(f"Agent 已存在: {name}")
-        raise typer.Exit(1)
-
-    agent_dir.mkdir(parents=True)
-
-    # 创建 Agent 配置
-    agent_config = {
-        "name": name,
-        "description": description,
-        "channel": channel,
-        "enabled": True,
-        "sandbox": {
-            "enabled": True,
-            "memory_mb": 128,
-            "cpu_count": 1,
-        },
-        "model": {
-            "provider": "openai",
-            "model_name": "gpt-4",
-            "api_key": "",
-        },
-        "tools": [],
-        "policy": {
-            "mode": "mention",
-            "scope": "both",
-            "allow_all_users": True,
-            "allow_all_groups": True,
-            "whitelist_users": [],
-            "whitelist_groups": [],
-        },
-        "created_at": None,  # 运行时填充
-    }
-
-    config_file = agent_dir / "agent.json"
-    with open(config_file, "w", encoding="utf-8") as f:
-        json.dump(agent_config, f, indent=2, ensure_ascii=False)
-
-    success(f"Agent 创建成功: {name}")
-    info(f"配置文件: {config_file}")
-    info(f"下一步: 编辑配置并运行 'heimaclaw channel setup {channel}'")
-
-
 @agent_app.command("list")
 def agent_list() -> None:
     """
@@ -745,8 +789,7 @@ def _setup_wecom() -> None:
     info("  2. 运行 'heimaclaw start' 启动服务")
 
 
-if __name__ == "__main__":
-    app()
+
 
 
 # ==================== tool 子命令 ====================
@@ -1284,7 +1327,7 @@ def clear_bindings(
 # ==================== 会话管理命令 ====================
 
 
-@app.command("session")
+@app.command("session", hidden=True)
 def session_command() -> None:
     """会话管理命令组"""
     info("使用以下子命令：")
@@ -1293,7 +1336,7 @@ def session_command() -> None:
     info("  heimaclaw session clear-all     - 清除所有会话")
 
 
-@app.command("session-list")
+@app.command("session-list", hidden=True)
 def session_list() -> None:
     """列出所有会话"""
     from pathlib import Path
@@ -1318,7 +1361,7 @@ def session_list() -> None:
     console.print(table)
 
 
-@app.command("session-clear")
+@app.command("session-clear", hidden=True)
 def session_clear(
     agent: str = typer.Option(..., "--agent", "-a", help="Agent 名称"),
 ) -> None:
@@ -1335,7 +1378,7 @@ def session_clear(
         info(f"Agent {agent} 暂无会话记录")
 
 
-@app.command("session-clear-all")
+@app.command("session-clear-all", hidden=True)
 def session_clear_all(
     confirm: bool = typer.Option(False, "--yes", "-y", help="确认清除"),
 ) -> None:
@@ -1359,7 +1402,23 @@ def session_clear_all(
 # ==================== 编译命令 ====================
 
 
-@agent_app.command("compile")
+
+@agent_app.command("clear-history")
+def agent_clear_history(
+    name: str = typer.Argument(..., help="Agent 名称"),
+) -> None:
+    """清除指定 Agent 的历史会话"""
+    import shutil
+    from pathlib import Path
+
+    sessions_dir = Path(f"/tmp/heimaclaw/sessions/{name}")
+    if sessions_dir.exists():
+        shutil.rmtree(sessions_dir)
+        success(f"已清除 Agent {name} 的所有会话历史")
+    else:
+        info(f"Agent {name} 暂无会话记录")
+
+@agent_app.command("compile", hidden=True)
 def agent_compile(
     agent_name: Optional[str] = typer.Argument(
         None, help="Agent 名称（不指定则编译所有）"
@@ -1458,28 +1517,32 @@ def agent_compile(
                 raise typer.Exit(1)
 
 
-@agent_app.command("create-md")
-def agent_create_markdown(
+@agent_app.command("create")
+def agent_create(
     name: str = typer.Argument(..., help="Agent 名称"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="指定工作空间路径"),
+    sandbox: bool = typer.Option(False, "--sandbox/--no-sandbox", help="是否开启沙箱隔离"),
     template: str = typer.Option("default", "--template", "-t", help="模板名称"),
 ) -> None:
     """
-    创建新 Agent
+    极简创建新 Agent 环境及 Markdown 配置
 
     示例:
         heimaclaw agent create my-agent
-        heimaclaw agent create my-agent --template advanced
+        heimaclaw agent create my-agent --workspace ./my_project --sandbox
     """
     from pathlib import Path
 
     # Agent 目录
-    agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path.home() / ".heimaclaw" / "agents"
+    if workspace:
+        agents_dir = Path(workspace)
+    else:
+        agents_dir = Path.cwd()
+        
     agent_dir = agents_dir / name
 
     if agent_dir.exists():
-        error(f"Agent '{name}' 已存在")
+        error(f"Agent '{name}' 已存在于 {agents_dir}")
         raise typer.Exit(1)
 
     # 创建目录
@@ -1491,12 +1554,13 @@ def agent_create_markdown(
         "description": f"{name} Agent",
         "channel": "feishu",
         "enabled": True,
-        "sandbox": {"enabled": False, "memory_mb": 128, "cpu_count": 1},
+        "sandbox": {"enabled": sandbox, "memory_mb": 128, "cpu_count": 1},
         "llm": {
-            "provider": "glm",
-            "model_name": "glm-4-flash",
+            "provider": "zhipu",
+            "model_name": "glm-4",
+            "api_key": "de4e3dc9f9d14c75bb2b4a38df59b2b9.CuO0DXKvTfYWVhVu",
             "temperature": 0.7,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
         },
     }
 
@@ -1674,6 +1738,62 @@ def discover_chats() -> None:
 # ==================== Agent 策略命令 ====================
 
 
+
+@agent_app.command("set-llm")
+def agent_set_llm(
+    name: str = typer.Argument(..., help="Agent 名称"),
+    provider: str = typer.Option("zhipu", "--provider", "-p", help="模型提供商 (zhipu, qwen, kimi, openai等)"),
+    model: str = typer.Option("glm-4", "--model", "-m", help="模型名称"),
+    api_key: str = typer.Option("de4e3dc9f9d14c75bb2b4a38df59b2b9.CuO0DXKvTfYWVhVu", "--api-key", "-k", help="API Key"),
+    base_url: Optional[str] = typer.Option(None, "--base-url", "-b", help="自定义 Base URL"),
+) -> None:
+    """
+    设置 Agent 的 LLM 配置
+    """
+    import json
+    from pathlib import Path
+
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
+
+    config_file = agents_dir / name / "agent.json"
+
+    if not config_file.exists():
+        error(f"Agent 不存在: {name}")
+        raise typer.Exit(1)
+
+    with open(config_file, encoding="utf-8") as f:
+        config = json.load(f)
+
+    # 预设厂商配置
+    preset_urls = {
+        "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+        "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "kimi": "https://api.moonshot.cn/v1",
+        "deepseek": "https://api.deepseek.com/v1"
+    }
+
+    if not base_url and provider.lower() in preset_urls:
+        base_url = preset_urls[provider.lower()]
+
+    config["llm"] = {
+        "provider": provider,
+        "model_name": model,
+        "api_key": api_key,
+        "base_url": base_url or "",
+        "temperature": 0.7,
+        "max_tokens": 8192,
+    }
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+    success(f"已更新 Agent {name} 的 LLM 配置")
+    info(f"  提供商: {provider}")
+    info(f"  模型: {model}")
+    info(f"  Base URL: {base_url or '默认'}")
+
 @agent_app.command("set-policy")
 def agent_set_policy(
     name: str = typer.Argument(..., help="Agent 名称"),
@@ -1831,43 +1951,41 @@ def stop_command(
         heimaclaw stop        # 正常停止
         heimaclaw stop -f    # 强制终止
     """
+    import os
     import signal
-    import subprocess
+    from pathlib import Path
 
     title("停止 HeiMaClaw 服务")
 
-    # 查找进程
+    run_dir = Path("/opt/heimaclaw/run")
+    if not run_dir.exists():
+        run_dir = Path.home() / ".heimaclaw" / "run"
+        
+    pid_file = run_dir / "heimaclaw.pid"
+    
+    if not pid_file.exists():
+        info("未找到 PID 文件，服务可能未在运行")
+        return
+        
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", "heimaclaw"],
-            capture_output=True,
-            text=True,
-        )
-        pids = result.stdout.strip().split("\n")
+        pid = int(pid_file.read_text().strip())
+    except ValueError:
+        error("PID 文件格式错误")
+        pid_file.unlink()
+        return
 
-        if not pids or not pids[0]:
-            info("没有运行中的 HeiMaClaw 服务")
-            return
-
-        killed = []
-        for pid in pids:
-            if pid.isdigit():
-                try:
-                    if force:
-                        os.kill(int(pid), signal.SIGKILL)
-                    else:
-                        os.kill(int(pid), signal.SIGTERM)
-                    killed.append(pid)
-                except ProcessLookupError:
-                    pass
-
-        if killed:
-            success(f"已停止服务 (PID: {', '.join(killed)})")
+    try:
+        if force:
+            os.kill(pid, signal.SIGKILL)
         else:
-            info("没有运行中的服务")
-
-    except Exception as e:
-        error(f"停止服务失败: {e}")
+            os.kill(pid, signal.SIGTERM)
+        success(f"已发送停止信号给进程 (PID: {pid})")
+        pid_file.unlink(missing_ok=True)
+    except ProcessLookupError:
+        warning(f"进程 {pid} 不存在，清理失效的 PID 文件")
+        pid_file.unlink()
+    except PermissionError:
+        error(f"没有权限停止进程 {pid}，请使用 root 权限运行")
         raise typer.Exit(1)
 
 
@@ -1882,49 +2000,53 @@ def restart_command(
         heimaclaw restart      # 正常重启
         heimaclaw restart -f   # 强制重启
     """
+    import os
     import signal
     import subprocess
+    import sys
+    from pathlib import Path
 
     title("重启 HeiMaClaw 服务")
 
-    # 查找进程
+    run_dir = Path("/opt/heimaclaw/run")
+    if not run_dir.exists():
+        run_dir = Path.home() / ".heimaclaw" / "run"
+        
+    pid_file = run_dir / "heimaclaw.pid"
+    
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            if force:
+                os.kill(pid, signal.SIGKILL)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            info(f"已停止旧服务 (PID: {pid})")
+            pid_file.unlink(missing_ok=True)
+            
+            # 等待进程结束
+            import time
+            for _ in range(50):
+                try:
+                    os.kill(pid, 0)
+                    time.sleep(0.1)
+                except ProcessLookupError:
+                    break
+        except (ValueError, ProcessLookupError):
+            warning("清理失效的 PID 文件")
+            pid_file.unlink(missing_ok=True)
+        except PermissionError:
+            error(f"没有权限停止进程 {pid}，请使用 root 权限运行")
+            raise typer.Exit(1)
+
+    info("启动新服务...")
+    # 继承当前进程的环境变量启动新服务 (使用 daemon 模式)
+    cmd = [sys.executable, "-m", "heimaclaw.cli", "start", "--daemon"]
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", "heimaclaw"],
-            capture_output=True,
-            text=True,
-        )
-        pids = result.stdout.strip().split("\n")
-
-        if pids and pids[0]:
-            # 停止旧服务
-            for pid in pids:
-                if pid.isdigit():
-                    try:
-                        if force:
-                            os.kill(int(pid), signal.SIGKILL)
-                        else:
-                            os.kill(int(pid), signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-            info("已停止旧服务")
-
-        # 等待进程结束
-        import time
-
-        time.sleep(2)
-
-        # 启动新服务
-        info("启动新服务...")
-        subprocess.Popen(
-            ["heimaclaw", "start"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        subprocess.run(cmd, check=True)
         success("服务已重启!")
-
-    except Exception as e:
-        error(f"重启服务失败: {e}")
+    except subprocess.CalledProcessError:
+        error("启动新服务失败")
         raise typer.Exit(1)
 
 
@@ -2004,3 +2126,61 @@ def log_command(
             console.print(result.stdout)
         if result.stderr:
             error(result.stderr)
+
+
+
+@app.command("task-status")
+def task_status(
+    session_key: Optional[str] = typer.Option(None, "--session", "-s", help="过滤特定会话的任务"),
+    all: bool = typer.Option(False, "--all", "-a", help="显示所有任务（包括已完成/失败的）"),
+) -> None:
+    """
+    查看当前子任务(Subagent)的执行状态
+    """
+    from heimaclaw.core.subagent_registry import SubagentRegistry
+    from heimaclaw.core.subagent_state import SubagentStatus
+    from rich.table import Table
+    from pathlib import Path
+
+    registry_dir = Path(".openclaw/subagent-state")
+    if not registry_dir.exists():
+        info("暂无任务记录")
+        return
+
+    registry = SubagentRegistry(state_dir=str(registry_dir))
+    
+    if session_key:
+        runs = registry.list_for_requester(session_key)
+    elif not all:
+        runs = registry.list_active()
+    else:
+        runs = list(registry._runs.values())
+
+    if not runs:
+        info("暂无符合条件的任务")
+        return
+
+    table = Table(title="Subagent 任务状态", show_header=True, header_style="cyan bold")
+    table.add_column("Run ID", style="dim")
+    table.add_column("状态")
+    table.add_column("模型")
+    table.add_column("任务描述")
+    table.add_column("会话 ID")
+
+    for run in sorted(runs, key=lambda x: x.created_at, reverse=True)[:50]:
+        status_color = "green" if run.status == SubagentStatus.COMPLETED else (
+            "yellow" if run.status in (SubagentStatus.RUNNING, SubagentStatus.PENDING) else "red"
+        )
+        table.add_row(
+            run.run_id[:8] + "...",
+            f"[{status_color}]{run.status.value}[/{status_color}]",
+            run.model or "默认",
+            (run.task[:30] + "...") if len(run.task) > 30 else run.task,
+            run.requester_id[:10] + "..." if len(run.requester_id) > 10 else run.requester_id
+        )
+
+    console.print(table)
+
+
+if __name__ == "__main__":
+    app()
