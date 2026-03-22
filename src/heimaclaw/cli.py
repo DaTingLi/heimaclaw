@@ -435,13 +435,22 @@ def status_command() -> None:
             service_status = "[red]错误[/red]"
             service_detail = "PID 文件损坏"
     
-    # 读取 Agent 列表获取活跃 Agent 数量
-    agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path.home() / ".heimaclaw" / "agents"
-    if agents_dir.exists():
-        agent_count = sum(1 for d in agents_dir.iterdir() if d.is_dir() and (d / "agent.json").exists())
-        active_agents = f"[green]{agent_count}[/green]"
+    # 读取 Agent 列表获取活跃 Agent 数量（检查两个可能的目录）
+    agents_count = 0
+    agents_dirs = [
+        Path("/opt/heimaclaw/data/agents"),
+        Path.home() / ".heimaclaw" / "agents",
+    ]
+    for ad in agents_dirs:
+        if ad.exists():
+            count = sum(1 for d in ad.iterdir() if d.is_dir() and (d / "agent.json").exists())
+            if count > agents_count:
+                agents_count = count
+    
+    if agents_count > 0:
+        active_agents = f"[green]{agents_count}[/green]"
+    else:
+        active_agents = "[dim]0[/dim]"
     
     # 服务状态
     table = Table(title="服务状态", show_header=True, header_style="cyan bold")
