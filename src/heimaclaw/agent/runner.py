@@ -268,6 +268,7 @@ class AgentRunner:
                         base_url=llm_base_url,
                         api_key=llm_api_key,
                         model_name=llm_model,
+                        agent_name=self.agent_id,
                     )
                     # 异步初始化
                     import asyncio

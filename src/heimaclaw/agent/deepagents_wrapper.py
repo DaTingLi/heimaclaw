@@ -25,10 +25,12 @@ class DeepAgentsWrapper:
         model_name: str = "glm-5",
         base_url: str = "https://open.bigmodel.cn/api/coding/paas/v4",
         api_key: str = None,
+        agent_name: str = "HeimaClaw",
     ):
         self.model_name = model_name
         self.base_url = base_url
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.agent_name = agent_name
         self._agent = None
         self._agent_lock = asyncio.Lock()
         self._init_task = None
