@@ -123,11 +123,12 @@ class FeishuWorker(mp.Process):
                 
                 # 发送响应
                 if response:
-                    await adapter.send_message(
+                    from heimaclaw.channel.base import OutboundMessage
+                    outbound = OutboundMessage(
                         chat_id=message.chat_id,
                         content=response,
-                        msg_id=message.message_id,
                     )
+                    await adapter.send_message(outbound)
             except Exception as e:
                 error(f"[Worker {self.agent_info.name}] 消息处理异常: {e}")
 
