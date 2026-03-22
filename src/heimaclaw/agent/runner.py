@@ -126,6 +126,10 @@ def _register_all_tools():
         timeout_ms=5000,
     )
     from heimaclaw.agent.tools.upload_tool import get_upload_image_definition, upload_image_handler
+    from heimaclaw.agent.tools.feishu_doc_tool import (
+        FEISHU_DOC_TOOL_DEFINITION,
+        feishu_doc_handler,
+    )
 
     upload_def = get_upload_image_definition()
     registry.register(
@@ -136,6 +140,16 @@ def _register_all_tools():
         timeout_ms=10000,
     )
     print(f"注册工具: {upload_def['name']} (async=False)")
+
+    # feishu_doc 工具
+    registry.register(
+        name=FEISHU_DOC_TOOL_DEFINITION["name"],
+        description=FEISHU_DOC_TOOL_DEFINITION["description"],
+        handler=feishu_doc_handler,
+        parameters=FEISHU_DOC_TOOL_DEFINITION["parameters"],
+        timeout_ms=30000,
+    )
+    print(f"注册工具: {FEISHU_DOC_TOOL_DEFINITION['name']} (async=False)")
 
 
 class AgentRunner:

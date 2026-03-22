@@ -27,6 +27,7 @@ except RuntimeError:
     pass  # 已设置
 
 from heimaclaw.agent.router import AgentRouter
+from heimaclaw.interfaces import AgentConfig, ChannelType
 from heimaclaw.agent.runner import AgentRunner
 from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.base import InboundMessage
@@ -86,6 +87,7 @@ class FeishuWorker(mp.Process):
         # 初始化全局视觉服务（优先全局配置，Agent 可覆盖）
         from heimaclaw.vision import get_vision_service, VisionConfig
         from heimaclaw.config.loader import get_config
+        from heimaclaw.agent.tools.feishu_doc_tool import set_feishu_credentials
         
         config = get_config()
         vision_cfg = getattr(config, 'vision', None) or VisionConfig()
@@ -116,8 +118,10 @@ class FeishuWorker(mp.Process):
             data_dir=f"/tmp/heimaclaw/sessions/{self.agent_info.name}"
         )
 
+        # 设置飞书凭证（供 feishu_doc_tool 使用）
+        set_feishu_credentials(self.agent_info.app_id, self.agent_info.app_secret)
+
         # 创建 Agent Runner
-        from heimaclaw.interfaces import AgentConfig, ChannelType
         
         runner = AgentRunner(
             agent_id=self.agent_info.name,
