@@ -1758,14 +1758,19 @@ def discover_chats() -> None:
 
 @agent_app.command("set-llm")
 def agent_set_llm(
+    ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent 名称"),
-    provider: str = typer.Option("zhipu", "--provider", "-p", help="模型提供商 (zhipu, qwen, kimi, openai等)"),
-    model: str = typer.Option("glm-4", "--model", "-m", help="模型名称"),
-    api_key: str = typer.Option("de4e3dc9f9d14c75bb2b4a38df59b2b9.CuO0DXKvTfYWVhVu", "--api-key", "-k", help="API Key"),
+    provider: str = typer.Option("openai", "--provider", "-p", help="模型提供商 (openai, zhipu, qwen, kimi, deepseek等)"),
+    model: str = typer.Option(..., "--model", "-m", help="模型名称"),
+    api_key: str = typer.Option(..., "--api-key", "-k", help="API Key（必填）"),
     base_url: Optional[str] = typer.Option(None, "--base-url", "-b", help="自定义 Base URL"),
 ) -> None:
     """
-    设置 Agent 的 LLM 配置
+    设置 Agent 的 LLM 模型配置
+    
+    示例:
+        heimaclaw agent set-llm default -m glm-5 -k xxx -b https://open.bigmodel.cn/api/coding/paas/v4
+        heimaclaw agent set-llm coder_heima -m glm-4 -k xxx -p openai -b https://open.bigmodel.cn/api/coding/paas/v4
     """
     import json
     from pathlib import Path
@@ -1785,20 +1790,31 @@ def agent_set_llm(
 
     # 预设厂商配置
     preset_urls = {
+        "openai": "https://api.openai.com/v1",
         "zhipu": "https://open.bigmodel.cn/api/paas/v4",
         "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "kimi": "https://api.moonshot.cn/v1",
-        "deepseek": "https://api.deepseek.com/v1"
+        "deepseek": "https://api.deepseek.com/v1",
+        "bigmodel": "https://open.bigmodel.cn/api/coding/paas/v4",
     }
 
-    if not base_url and provider.lower() in preset_urls:
-        base_url = preset_urls[provider.lower()]
+    # 如果没有提供 base_url，使用预设或提示错误
+    if not base_url:
+        base_url = preset_urls.get(provider.lower(), "")
+    
+    if not base_url:
+        error(f"未知的 provider '{provider}'，请通过 --base-url 指定 API 地址")
+        raise typer.Exit(1)
+
+    if not api_key or api_key == "xxx":
+        error("API Key 不能为空，请通过 --api-key 指定")
+        raise typer.Exit(1)
 
     config["llm"] = {
         "provider": provider,
         "model_name": model,
         "api_key": api_key,
-        "base_url": base_url or "",
+        "base_url": base_url,
         "temperature": 0.7,
         "max_tokens": 8192,
     }
@@ -1809,7 +1825,61 @@ def agent_set_llm(
     success(f"已更新 Agent {name} 的 LLM 配置")
     info(f"  提供商: {provider}")
     info(f"  模型: {model}")
-    info(f"  Base URL: {base_url or '默认'}")
+    info(f"  Base URL: {base_url}")
+
+@agent_app.command("set-vision")
+def agent_set_vision(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent 名称"),
+    enabled: bool = typer.Option(False, "--enable/--disable", help="是否启用视觉理解"),
+    model: str = typer.Option(None, "--model", "-m", help="视觉模型名称 (如 glm-4v)"),
+    api_key: str = typer.Option(None, "--api-key", "-k", help="API Key（与 LLM 相同可省略）"),
+    base_url: Optional[str] = typer.Option(None, "--base-url", "-b", help="自定义 Base URL"),
+) -> None:
+    """
+    设置 Agent 的视觉理解配置（可选，覆盖全局配置）
+    
+    示例:
+        heimaclaw agent set-vision default --enable -m glm-4v -k xxx
+        heimaclaw agent set-vision coder_heima --disable
+    """
+    import json
+    from pathlib import Path
+
+    agents_dir = Path("/opt/heimaclaw/data/agents")
+    if not agents_dir.exists():
+        agents_dir = Path.home() / ".heimaclaw" / "agents"
+
+    config_file = agents_dir / name / "agent.json"
+
+    if not config_file.exists():
+        error(f"Agent 不存在: {name}")
+        raise typer.Exit(1)
+
+    with open(config_file, encoding="utf-8") as f:
+        config = json.load(f)
+
+    # 读取 LLM 的 api_key 作为默认值
+    llm_api_key = api_key or config.get("llm", {}).get("api_key", "")
+    
+    vision_config = {
+        "enabled": enabled,
+        "model": model or "glm-4v",
+        "api_key": llm_api_key,
+        "base_url": base_url or config.get("llm", {}).get("base_url", "https://open.bigmodel.cn/api/coding/paas/v4"),
+    }
+    
+    config["vision"] = vision_config
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+    status = "已启用" if enabled else "已禁用"
+    success(f"已更新 Agent {name} 的视觉配置: {status}")
+    if enabled:
+        info(f"  模型: {vision_config['model']}")
+        info(f"  Base URL: {vision_config['base_url']}")
+
 
 @agent_app.command("set-policy")
 def agent_set_policy(
