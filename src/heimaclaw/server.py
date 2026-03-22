@@ -16,7 +16,7 @@ from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.config.loader import get_config
-from heimaclaw.console import error, info
+from heimaclaw.console import error, info, warning
 from heimaclaw.interfaces import AgentConfig, ChannelType
 from heimaclaw.server_monitoring import router as monitoring_router
 
@@ -142,7 +142,7 @@ def init_channel_adapters() -> None:
             }
 
         wecom_adapter = WeComAdapter(wecom_config)
-        if wecom_adapter.is_configured():
+        if wecom_adapter.is_configured:
             _channel_adapters["wecom"] = wecom_adapter
             info("企业微信适配器已配置")
     except Exception as e:
