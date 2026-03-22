@@ -1,0 +1,36 @@
+# HeiMaClaw 配置文件
+# 安装后位于: /opt/heimaclaw/config/config.toml
+
+[llm]
+provider = "openai"
+model = "glm-5"                      # 默认语言模型
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
+api_key = ""                         # 【需要填写】API Key
+max_tokens = 4096
+temperature = 0.7
+
+[vision]
+enabled = false                      # 是否启用全局视觉理解
+model = "glm-4v"                    # 视觉模型
+api_key = ""                         # 【需要填写】视觉 API Key（与 LLM 相同）
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
+timeout = 60
+max_retries = 3
+
+[channels.feishu]
+app_id = ""                          # 【需要填写】飞书 App ID
+app_secret = ""                      # 【需要填写】飞书 App Secret
+
+[sandbox]
+enabled = true                       # 是否启用沙箱
+memory_mb = 128                      # 沙箱内存
+cpu_count = 1                        # CPU 核心数
+
+[server]
+host = "0.0.0.0"
+port = 8000
+workers = 4
+
+[logging]
+level = "INFO"
+file = "/opt/heimaclaw/logs/heimaclaw.log"
