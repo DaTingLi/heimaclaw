@@ -122,8 +122,8 @@ class FeishuWorker(mp.Process):
                     except Exception:
                         pass
                 
-                # 确定 session_id（私聊用 user_id，群聊需要 session 管理）
-                session_id = message.user_id if message.chat_type != "group" else None
+                # 使用 user_id 作为 session_id（每个用户一个会话）
+                session_id = message.user_id
                 
                 # 处理消息
                 response = await runner.process_message(
