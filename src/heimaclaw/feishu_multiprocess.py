@@ -233,6 +233,7 @@ class MultiProcessFeishuService:
 
                 agent_info = AgentInfo(
                     name=agent_name,
+                    display_name=data.get("display_name", agent_name),
                     app_id=app_id,
                     app_secret=app_secret,
                     llm_config=data.get("llm", {}),
