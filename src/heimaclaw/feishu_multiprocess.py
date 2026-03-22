@@ -116,9 +116,9 @@ class FeishuWorker(mp.Process):
             try:
                 # 处理消息
                 response = await runner.process_message(
-                    message.content,
                     user_id=message.user_id,
-                    chat_id=message.chat_id,
+                    channel=message.channel_type,
+                    content=message.content,
                 )
                 
                 # 发送响应
