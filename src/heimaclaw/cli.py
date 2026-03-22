@@ -447,21 +447,53 @@ def status_command() -> None:
             if count > agents_count:
                 agents_count = count
     
+    # 统计活跃会话数量
+    sessions_count = 0
+    for ad in agents_dirs:
+        sessions_dir = ad.parent / "sessions"
+        if sessions_dir.exists():
+            for session_subdir in sessions_dir.iterdir():
+                if session_subdir.is_dir():
+                    sessions_count += len(list(session_subdir.glob("*.json")))
+    
+    # 统计沙箱数量
+    sandbox_dir = Path("/opt/heimaclaw/sandboxes")
+    sandbox_count = 0
+    running_sandbox_count = 0
+    if sandbox_dir.exists():
+        sandbox_count = len([d for d in sandbox_dir.iterdir() if d.is_dir()])
+        running_sandbox_count = len([d for d in sandbox_dir.iterdir() if d.is_dir() and (d / "api.sock").exists()])
+    
     if agents_count > 0:
         active_agents = f"[green]{agents_count}[/green]"
     else:
         active_agents = "[dim]0[/dim]"
+    
+    sandbox_detail = f"[dim]{running_sandbox_count} / {sandbox_count}[/dim]" if sandbox_count > 0 else "-"
+    sandbox_status = "[green]运行中[/green]" if running_sandbox_count > 0 else "[yellow]未初始化[/yellow]"
+    sessions_detail = f"[green]{sessions_count}[/green]" if sessions_count > 0 else "[dim]0[/dim]"
     
     # 服务状态
     table = Table(title="服务状态", show_header=True, header_style="cyan bold")
     table.add_column("项目")
     table.add_column("状态")
     table.add_column("详情")
+    # 获取运行中的 Agent 名称
+    running_agents = ""
+    if service_status == "[green]运行中[/green]":
+        agent_names = []
+        for ad in agents_dirs:
+            if ad.exists():
+                for d in ad.iterdir():
+                    if d.is_dir() and (d / "agent.json").exists():
+                        agent_names.append(d.name)
+        running_agents = ", ".join(agent_names) if agent_names else "-"
+    
     table.add_row("服务", service_status, service_detail)
-    table.add_row("沙箱后端", sandbox_status, "-")
+    table.add_row("沙箱后端", sandbox_status, sandbox_detail)
     table.add_row("预热池", "[dim]0 / 5[/dim]", "-")
-    table.add_row("活跃 Agent", active_agents, "-")
-    table.add_row("活跃会话", active_sessions, "-")
+    table.add_row("活跃 Agent", active_agents, running_agents if running_agents else "-")
+    table.add_row("活跃会话", sessions_detail, "-")
 
     console.print(table)
 
@@ -771,6 +803,7 @@ def agent_list() -> None:
                     if name in seen_names:
                         continue
                     seen_names.add(name)
+                    
                     # 获取模型信息
                     llm_cfg = config.get("llm", {})
                     model_name = llm_cfg.get("model_name", "-")
@@ -782,22 +815,34 @@ def agent_list() -> None:
                     sandbox_enabled = config.get("sandbox", {}).get("enabled", False)
                     sandbox_str = "[green]🔥 Firecracker[/green]" if sandbox_enabled else "[dim]本地进程[/dim]"
                     
+                    # 判断 Agent 是否正在运行
+                    import os
+                    is_running = False
+                    run_dir = Path("/opt/heimaclaw/run")
+                    if run_dir.exists():
+                        pid_file = run_dir / "heimaclaw.pid"
+                        if pid_file.exists():
+                            try:
+                                pid = int(pid_file.read_text().strip())
+                                if os.path.exists(f"/proc/{pid}"):
+                                    is_running = True
+                            except:
+                                pass
+                    
+                    status_str = "[green]运行中[/green]" if is_running else "[yellow]已配置[/yellow]"
+                    
                     agents.append(
                         [
                             name,
                             display,
                             model_name,
-                            (
-                                "[green]启用[/green]"
-                                if config.get("enabled")
-                                else "[dim]禁用[/dim]"
-                            ),
+                            status_str,
                             sandbox_str,
                         ]
                     )
 
     if agents:
-        print_table("Agent 列表", agents, ["名称", "飞书名", "模型", "状态", "沙箱"])
+        print_table("Agent 列表", agents, ["名称", "飞书名", "模型", "运行状态", "沙箱"])
     else:
         info("暂无 Agent")
 
