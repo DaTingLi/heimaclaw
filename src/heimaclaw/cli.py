@@ -679,35 +679,40 @@ def agent_list() -> None:
 
     title("Agent 列表")
 
-    agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path("/opt/heimaclaw/data/agents")
-    if not agents_dir.exists():
-        agents_dir = Path.home() / ".heimaclaw" / "agents"
-
-    if not agents_dir.exists():
-        info("暂无 Agent")
-        return
+    # 检查两个可能的 Agent 配置目录
+    agents_dirs = [
+        Path("/opt/heimaclaw/data/agents"),
+        Path.home() / ".heimaclaw" / "agents",
+    ]
 
     agents = []
-    for agent_dir in agents_dir.iterdir():
-        if agent_dir.is_dir():
-            config_file = agent_dir / "agent.json"
-            if config_file.exists():
-                with open(config_file, encoding="utf-8") as f:
-                    config = json.load(f)
-                agents.append(
-                    [
-                        config.get("name", agent_dir.name),
-                        config.get("channel", "-"),
-                        (
-                            "[green]启用[/green]"
-                            if config.get("enabled")
-                            else "[dim]禁用[/dim]"
-                        ),
-                        config.get("description", "-")[:30],
-                    ]
-                )
+    seen_names = set()  # 避免重复
+    
+    for agents_dir in agents_dirs:
+        if not agents_dir.exists():
+            continue
+        for agent_dir in agents_dir.iterdir():
+            if agent_dir.is_dir():
+                config_file = agent_dir / "agent.json"
+                if config_file.exists():
+                    with open(config_file, encoding="utf-8") as f:
+                        config = json.load(f)
+                    name = config.get("name", agent_dir.name)
+                    if name in seen_names:
+                        continue
+                    seen_names.add(name)
+                    agents.append(
+                        [
+                            name,
+                            config.get("channel", "-"),
+                            (
+                                "[green]启用[/green]"
+                                if config.get("enabled")
+                                else "[dim]禁用[/dim]"
+                            ),
+                            config.get("description", "-")[:30],
+                        ]
+                    )
 
     if agents:
         print_table("Agent 列表", agents, ["名称", "渠道", "状态", "描述"])
