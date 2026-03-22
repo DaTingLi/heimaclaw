@@ -701,21 +701,33 @@ def agent_list() -> None:
                     if name in seen_names:
                         continue
                     seen_names.add(name)
+                    # 获取模型信息
+                    llm_cfg = config.get("llm", {})
+                    model_name = llm_cfg.get("model_name", "-")
+                    
+                    # 获取 display_name
+                    display = config.get("display_name", "-")
+                    
+                    # 获取沙箱状态
+                    sandbox_enabled = config.get("sandbox", {}).get("enabled", False)
+                    sandbox_str = "[green]🔥 Firecracker[/green]" if sandbox_enabled else "[dim]本地进程[/dim]"
+                    
                     agents.append(
                         [
                             name,
-                            config.get("channel", "-"),
+                            display,
+                            model_name,
                             (
                                 "[green]启用[/green]"
                                 if config.get("enabled")
                                 else "[dim]禁用[/dim]"
                             ),
-                            config.get("description", "-")[:30],
+                            sandbox_str,
                         ]
                     )
 
     if agents:
-        print_table("Agent 列表", agents, ["名称", "渠道", "状态", "描述"])
+        print_table("Agent 列表", agents, ["名称", "飞书名", "模型", "状态", "沙箱"])
     else:
         info("暂无 Agent")
 
