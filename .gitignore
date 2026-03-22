@@ -74,3 +74,6 @@ standards_backup/
 # Local config files (contain secrets)
 config/config.toml
 config/*.toml
+-e 
+# User agents config (local only - contains secrets)
+agents/
