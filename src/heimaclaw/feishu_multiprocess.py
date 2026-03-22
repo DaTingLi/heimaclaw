@@ -231,12 +231,16 @@ class MultiProcessFeishuService:
                     warning(f"Agent {agent_name} 缺少飞书配置，跳过")
                     continue
 
+                # 构建 llm_config，包含 display_name
+                llm_cfg = data.get("llm", {})
+                llm_cfg["display_name"] = data.get("display_name", agent_name)
+                
                 agent_info = AgentInfo(
                     name=agent_name,
                     display_name=data.get("display_name", agent_name),
                     app_id=app_id,
                     app_secret=app_secret,
-                    llm_config=data.get("llm", {}),
+                    llm_config=llm_cfg,
                     sandbox_enabled=data.get("sandbox", {}).get("enabled", False),
                     workspace=str(agent_dir),
                 )
