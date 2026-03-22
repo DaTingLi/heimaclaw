@@ -72,8 +72,8 @@ class DeepAgentsWrapper:
                 from heimaclaw.console import console
                 console.print("\n[magenta bold][Sandbox: Local Process] 正在使用本地子进程执行（无沙箱隔离）[/magenta bold]\n")
 
-            # 根据 agent_name 生成专属 system prompt
-            agent_system_prompt = SYSTEM_PROMPT.replace("HeimaClaw", self.agent_name)
+            # 根据 agent_name 生成专属 system prompt（使用模板）
+            agent_system_prompt = SYSTEM_PROMPT.format(agent_name=self.agent_name)
             self._agent = create_deep_agent(
                 model=llm,
                 backend=backend,
