@@ -24,6 +24,8 @@ class InboundMessage:
     message_type: str = "text"  # text / post / interactive
     chat_type: str = "p2p"  # p2p=私聊, group=群聊
     mentions: list[str] = field(default_factory=list)  # 被 @ 的用户 ID 列表
+    image_urls: list[str] = field(default_factory=list)  # 图片 URL 列表（已下载或外部URL）
+    image_keys: list[str] = field(default_factory=list)  # 飞书图片 Key（需要下载）
     raw_data: dict[str, Any] = field(default_factory=dict)
 
 

@@ -181,6 +181,11 @@ class FeishuWebSocketAdapter(ChannelAdapter):
                                 content_text = f"[收到文件: {content_obj.get('file_name', 'unknown')}]"
                         elif "image_key" in content_obj:
                             content_text = "[收到一张图片]"
+                            image_key = content_obj.get("image_key")
+                            if image_key:
+                                if not hasattr(msg, 'image_keys'):
+                                    msg.image_keys = []
+                                msg.image_keys.append(image_key)
                         elif "media_key" in content_obj:
                             content_text = "[收到一个富媒体(视频/音频)文件]"
                         else:

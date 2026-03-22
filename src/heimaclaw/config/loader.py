@@ -127,6 +127,19 @@ class AppConfig(BaseModel):
     environment: str = Field(default="development", description="运行环境")
 
 
+class VisionConfig(BaseModel):
+    """全局视觉理解配置"""
+    enabled: bool = Field(default=False, description="是否启用全局视觉理解")
+    model: str = Field(default="glm-4v", description="视觉模型名称")
+    api_key: str = Field(default="", description="API Key")
+    base_url: str = Field(
+        default="https://open.bigmodel.cn/api/coding/paas/v4",
+        description="API Base URL"
+    )
+    timeout: int = Field(default=60, description="超时时间（秒）")
+    max_retries: int = Field(default=3, description="最大重试次数")
+
+
 class Config(BaseModel):
     """完整配置模型"""
 
@@ -135,6 +148,7 @@ class Config(BaseModel):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
 
     class Config:
         arbitrary_types_allowed = True

@@ -14,8 +14,10 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+import base64
 from pathlib import Path
 from typing import Any, Optional
+import asyncio
 
 # 设置启动方法为 spawn（避免 fork 问题）
 try:
@@ -80,6 +82,23 @@ class FeishuWorker(mp.Process):
 
     async def _run(self) -> None:
         """异步主循环"""
+        # 初始化全局视觉服务（如果启用）
+        from heimaclaw.vision import get_vision_service, VisionConfig
+        from heimaclaw.config.loader import get_config
+        
+        config = get_config()
+        if hasattr(config, 'vision') and config.vision.enabled:
+            vision_cfg = config.vision
+            get_vision_service().configure(VisionConfig(
+                enabled=True,
+                model=vision_cfg.model,
+                api_key=vision_cfg.api_key,
+                base_url=vision_cfg.base_url,
+                timeout=vision_cfg.timeout,
+                max_retries=vision_cfg.max_retries,
+            ))
+            info(f"[Worker {self.agent_info.name}] 全局视觉服务已启用，模型: {vision_cfg.model}")
+        
         # 创建 Agent
         session_manager = SessionManager(
             data_dir=f"/tmp/heimaclaw/sessions/{self.agent_info.name}"
@@ -115,6 +134,68 @@ class FeishuWorker(mp.Process):
         # 创建消息处理器
         async def message_handler(message: InboundMessage) -> None:
             try:
+                # 【关键】处理图片（如果消息包含图片）
+                content = message.content
+                image_keys = getattr(message, 'image_keys', [])
+                image_urls = getattr(message, 'image_urls', [])
+                
+                if image_keys or image_urls:
+                    vision_service = get_vision_service()
+                    if vision_service.is_enabled():
+                        try:
+                            image_descriptions = []
+                            
+                            # 处理飞书 image_keys（需要下载）
+                            for img_key in image_keys:
+                                try:
+                                    # 下载图片
+                                    import tempfile
+                                    import os
+                                    from pathlib import Path
+                                    
+                                    # 使用 adapter 下载（如果可用）
+                                    if hasattr(self, '_ws_adapter') and self._ws_adapter:
+                                        tmp_path = f"/tmp/vision_{img_key}.jpg"
+                                        success = await self._ws_adapter.download_resource(
+                                            message_id=message.message_id,
+                                            file_key=img_key,
+                                            resource_type="image",
+                                            save_path=tmp_path
+                                        )
+                                        if success and os.path.exists(tmp_path):
+                                            with open(tmp_path, 'rb') as f:
+                                                img_b64 = base64.b64encode(f.read()).decode()
+                                            desc = await vision_service.understand_image(
+                                                image_data=img_b64,
+                                                prompt="请描述这张图片的内容",
+                                                agent_id=self.agent_info.name
+                                            )
+                                            image_descriptions.append(f"[图片描述: {desc}]")
+                                            os.remove(tmp_path)
+                                        else:
+                                            image_descriptions.append("[图片下载失败]")
+                                except Exception as e:
+                                    warning(f"[Worker {self.agent_info.name}] 下载图片失败: {e}")
+                                    image_descriptions.append(f"[图片处理失败: {str(e)[:50]}]")
+                            
+                            # 处理外部 image_urls
+                            for img_url in image_urls:
+                                try:
+                                    desc = await vision_service.understand_image(
+                                        image_data=img_url,
+                                        prompt="请描述这张图片的内容",
+                                        agent_id=self.agent_info.name
+                                    )
+                                    image_descriptions.append(f"[图片描述: {desc}]")
+                                except Exception as e:
+                                    image_descriptions.append(f"[图片理解失败: {str(e)[:50]}]")
+                            
+                            if image_descriptions:
+                                content = "\n".join(image_descriptions) + "\n" + content
+                                info(f"[Worker {self.agent_info.name}] 已理解 {len(image_descriptions)} 张图片")
+                        except Exception as e:
+                            warning(f"[Worker {self.agent_info.name}] 视觉理解失败: {e}")
+                
                 # 【关键】群聊时检查是否 @mentioned 当前机器人
                 # 使用双向模糊匹配，自动适配不同命名的机器人
                 if message.chat_type == "group":
