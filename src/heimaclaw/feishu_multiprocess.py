@@ -115,6 +115,24 @@ class FeishuWorker(mp.Process):
         # 创建消息处理器
         async def message_handler(message: InboundMessage) -> None:
             try:
+                # 【关键】群聊时检查是否 @mentioned 当前机器人
+                if message.chat_type == "group":
+                    bot_mentioned = False
+                    # 检查 mentions 列表
+                    if message.mentions:
+                        for mention in message.mentions:
+                            if self.agent_info.display_name.lower() in mention.lower():
+                                bot_mentioned = True
+                                break
+                    # 也检查消息内容是否包含机器人名称（飞书 sometimes puts it in content）
+                    content_lower = message.content.lower()
+                    if self.agent_info.display_name.lower() in content_lower:
+                        bot_mentioned = True
+                    
+                    if not bot_mentioned:
+                        # 群聊但没有被 @，跳过处理
+                        return
+                
                 # 添加 Typing Indicator
                 typing_id = None
                 if message.message_id:
