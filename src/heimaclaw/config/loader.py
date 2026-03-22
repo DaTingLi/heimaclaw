@@ -16,8 +16,12 @@ enabled = true
 from pathlib import Path
 from typing import Optional
 
-import tomli
 import tomli_w
+try:
+    import tomllib as tomli
+except ImportError:
+    import tomli
+
 from pydantic import BaseModel, Field
 
 from heimaclaw.console import warning

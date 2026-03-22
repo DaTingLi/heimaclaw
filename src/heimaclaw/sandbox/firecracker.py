@@ -412,12 +412,17 @@ class FirecrackerBackend(SandboxBackend):
         降级模式执行命令
         """
         start_time = time.time()
+        
+        # 确保降级时在正确的沙箱目录执行，以对齐预期
+        cwd_path = Path("./heimaclaw_workspace").absolute()
+        cwd_path.mkdir(parents=True, exist_ok=True)
 
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=str(cwd_path),
             )
 
             stdout, stderr = await asyncio.wait_for(
