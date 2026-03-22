@@ -122,8 +122,9 @@ class FeishuWorker(mp.Process):
                     except Exception:
                         pass
                 
-                # 使用 user_id 作为 session_id（每个用户一个会话）
-                session_id = message.user_id
+                # 使用 user_id + app_id 的组合作为 session_id
+                # 因为同一个用户可能使用多个飞书机器人 App
+                session_id = f"{message.user_id}_{self.agent_info.app_id}"
                 
                 # 处理消息
                 response = await runner.process_message(
