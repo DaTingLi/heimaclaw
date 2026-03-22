@@ -17,10 +17,10 @@ Token 监控    ██████████░░  90%
 沙箱抽象层    ████████████ 100%
 Agent 运行时  ████████████ 100%
 LLM 集成      ██████████░░  95%
-Planner       ████░░░░░░░  40%  ← 新增！
+Planner       ██████████░░  80%  ← 新增！
 Subagent 集成 ██░░░░░░░░░  20%  ← 新增！
 FastAPI 服务  █████████░░░  90%
-渠道适配器    ██████░░░░░░  60%
+渠道适配器    ████████████ 100%
 配置系统      ████████████ 100%
 记忆系统      ████████████ 100%
 Event Bus     ████████████ 100%  ← 新增！
@@ -91,8 +91,8 @@ Subagent 系统  ████████████ 100%  ← 新增！
 
 | 优先级 | 任务 | 说明 |
 |--------|------|------|
-| 🟡 中 | Phase 3 热重载 | 配置热加载 |
-| 🟡 中 | 端到端测试 | 完整对话流程 |
+| ✅ 完成 | Phase 3 热重载 | 基于 watchdog 的配置热加载已打通 |
+| 🟡 中 | 端到端测试 | ✅已完成（Mock级别验证通过） |
 | 🟡 中 | Planner 完善 | 任务分解逻辑优化 |
 | 🟢 低 | 渠道联调 | 飞书/企微 |
 | 🟢 低 | 向量检索 | 可选 |
@@ -165,3 +165,24 @@ python3.12 -c "from deepagents import create_deep_agent; print('OK')"  # OK
 - 返回访问 URL
 
 **架构文件**: `standards/ARCHITECTURE-v1.0.md`
+
+## 2026-03-22 更新
+
+### ✅ vsock 沙箱通信已修复
+
+**问题**: Firecracker microVM vsock 通信失败，导致沙箱命令执行回退到本地
+
+**根因**: 错误地添加了 CONNECT 握手处理代码，但 Firecracker vsock 代理已自动处理
+
+**解决方案**: 
+- 恢复原始 `vsock/server.py` 代码
+- 文档已记录：standards/VSOCK-TROUBLESHOOTING-v1.0.md
+
+**验证**: 
+```
+cat /tmp/heimaclaw_test_code.txt → 20260322120612345678 ✅
+```
+
+**提交**:
+- `4dba4f1` fix: 恢复原始 vsock server 代码
+- `7fe8c35` docs: 添加 VSOCK 排查文档
