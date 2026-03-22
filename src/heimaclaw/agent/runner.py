@@ -264,11 +264,13 @@ class AgentRunner:
                     print(f"[Runner] Warning: _llm_adapter.config not found, using defaults")
                 
                 try:
+                    # 获取显示名称（用于对外身份）
+                    display_name = self._llm_config.get("display_name", self.agent_id)
                     self._deep_agent = DeepAgentsWrapper(
                         base_url=llm_base_url,
                         api_key=llm_api_key,
                         model_name=llm_model,
-                        agent_name=self.agent_id,
+                        agent_name=display_name,
                     )
                     # 异步初始化
                     import asyncio

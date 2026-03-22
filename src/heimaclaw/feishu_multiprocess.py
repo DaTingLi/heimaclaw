@@ -36,6 +36,7 @@ from heimaclaw.console import error, info, warning
 class AgentInfo:
     """Agent 信息"""
     name: str
+    display_name: str  # 对外展示的名称（飞书显示名）
     app_id: str
     app_secret: str
     llm_config: dict
