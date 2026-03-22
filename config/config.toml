@@ -1,0 +1,19 @@
+[llm]
+provider = "openai"
+model = "anthropic/claude-3-haiku"
+base_url = "https://openrouter.ai/api/v1"
+api_key = "sk-or-v1-d0bd7b02bea09f2a482afcf141005f956a42b231e993b3d184ec"
+max_tokens = 4096
+temperature = 0.7
+
+[channels.feishu]
+app_id = "cli_a935c9e5abe1dcc0"
+app_secret = "4rkgZTz4PlTHVVjL4oQJOgJtJNshm3FM"
+
+[vision]
+enabled = false
+model = "glm-4v"
+api_key = ""
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
+timeout = 60
+max_retries = 3

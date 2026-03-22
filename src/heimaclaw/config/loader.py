@@ -160,10 +160,12 @@ class Config(BaseModel):
 class ConfigLoader:
     """配置加载器"""
 
+    # 配置路径优先级（开发优先，安装其次）
     DEFAULT_PATHS = [
-        Path("/opt/heimaclaw/config/config.toml"),
-        Path.home() / ".heimaclaw" / "config.toml",
-        Path.cwd() / "config.toml",
+        Path(__file__).parent.parent.parent.parent / "config" / "config.toml",  # 项目源码 config/
+        Path("/opt/heimaclaw/config/config.toml"),  # 安装目录
+        Path.home() / ".heimaclaw" / "config.toml",  # 用户目录
+        Path.cwd() / "config.toml",  # 当前目录
     ]
 
     def __init__(self, config_path: Optional[Path] = None):
