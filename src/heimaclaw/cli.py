@@ -1,3 +1,4 @@
+import heimaclaw.paths as paths
 """
 HeiMaClaw CLI 入口模块
 
@@ -86,7 +87,7 @@ def init_command(
         None,
         "--path",
         "-p",
-        help="项目初始化路径，默认为 /opt/heimaclaw",
+        help=f"项目初始化路径，默认为 {paths.INSTALL_ROOT}",
     ),
     force: bool = typer.Option(
         False,
@@ -102,7 +103,7 @@ def init_command(
     """
     from pathlib import Path
 
-    project_path = Path(path) if path else Path("/opt/heimaclaw")
+    project_path = Path(path) if path else paths.INSTALL_ROOT
 
     title(f"初始化 HeiMaClaw 项目: {project_path}")
 
@@ -239,7 +240,7 @@ def install_command(
     title("HeiMaClaw 安装向导")
     
     source_dir = Path(__file__).parent.parent.parent
-    install_config_dir = Path("/opt/heimaclaw/config")
+    install_config_dir = paths.CONFIG_DIR
     agents_dir = Path.home() / ".heimaclaw" / "agents"
     
     info("[1/4] 创建目录结构...")
@@ -319,7 +320,7 @@ def start_command(
     from pathlib import Path
     
     # PID 文件路径
-    run_dir = Path("/opt/heimaclaw/run")
+    run_dir = paths.get_run_dir()
     if not run_dir.exists():
         try:
             run_dir.mkdir(parents=True, exist_ok=True)
@@ -354,7 +355,7 @@ def start_command(
         if not feishu: cmd.append("--no-feishu")
         if not http: cmd.append("--no-http")
         
-        log_dir = Path("/opt/heimaclaw/logs")
+        log_dir = paths.get_log_dir()
         if not log_dir.exists():
             log_dir = Path.home() / ".heimaclaw" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -475,7 +476,7 @@ def status_command() -> None:
     title("HeiMaClaw 状态")
 
     # 读取 PID 文件判断服务状态
-    run_dir = Path("/opt/heimaclaw/run")
+    run_dir = paths.get_run_dir()
     pid_file = run_dir / "heimaclaw.pid"
     
     service_status = "[yellow]未启动[/yellow]"
@@ -501,7 +502,7 @@ def status_command() -> None:
     # 读取 Agent 列表获取活跃 Agent 数量（检查两个可能的目录）
     agents_count = 0
     agents_dirs = [
-        Path("/opt/heimaclaw/data/agents"),
+        paths.AGENTS_DIR,
         Path.home() / ".heimaclaw" / "agents",
     ]
     for ad in agents_dirs:
@@ -520,7 +521,7 @@ def status_command() -> None:
                     sessions_count += len(list(session_subdir.glob("*.json")))
     
     # 统计沙箱数量
-    sandbox_dir = Path("/opt/heimaclaw/sandboxes")
+    sandbox_dir = paths.SANDBOX_DIR
     sandbox_count = 0
     running_sandbox_count = 0
     if sandbox_dir.exists():
@@ -570,7 +571,7 @@ def status_command() -> None:
     channel_table.add_column("配置")
     
     # 读取配置
-    config_path = Path("/opt/heimaclaw/config/config.toml")
+    config_path = paths.CONFIG_FILE
     if not config_path.exists():
         config_path = Path.home() / ".heimaclaw" / "config.toml"
     
@@ -654,7 +655,7 @@ def doctor_command() -> None:
     )
 
     # 配置文件检查
-    config_path = Path("/opt/heimaclaw/config/config.toml")
+    config_path = paths.CONFIG_FILE
     if not config_path.exists():
         config_path = Path.home() / ".heimaclaw" / "config.toml"
     checks.append(
@@ -709,7 +710,7 @@ def config_show(
 
     title("配置信息")
 
-    config_path = Path("/opt/heimaclaw/config/config.toml")
+    config_path = paths.CONFIG_FILE
     if not config_path.exists():
         config_path = Path.home() / ".heimaclaw" / "config.toml"
 
@@ -753,7 +754,7 @@ def config_set(
     """
     from pathlib import Path
 
-    config_path = Path("/opt/heimaclaw/config/config.toml")
+    config_path = paths.CONFIG_FILE
     if not config_path.exists():
         config_path = Path.home() / ".heimaclaw" / "config.toml"
 
@@ -810,7 +811,7 @@ def config_edit() -> None:
     import subprocess
     from pathlib import Path
 
-    config_path = Path("/opt/heimaclaw/config/config.toml")
+    config_path = paths.CONFIG_FILE
     if not config_path.exists():
         config_path = Path.home() / ".heimaclaw" / "config.toml"
 
@@ -846,7 +847,7 @@ def agent_list() -> None:
 
     # 检查两个可能的 Agent 配置目录
     agents_dirs = [
-        Path("/opt/heimaclaw/data/agents"),
+        paths.AGENTS_DIR,
         Path.home() / ".heimaclaw" / "agents",
     ]
 
@@ -881,7 +882,7 @@ def agent_list() -> None:
                     # 判断 Agent 是否正在运行
                     import os
                     is_running = False
-                    run_dir = Path("/opt/heimaclaw/run")
+                    run_dir = paths.get_run_dir()
                     if run_dir.exists():
                         pid_file = run_dir / "heimaclaw.pid"
                         if pid_file.exists():
@@ -1638,7 +1639,7 @@ def agent_compile(
     from heimaclaw.config.compiler import ConfigCompiler
 
     # 获取 agents 目录
-    agents_dir = Path("/opt/heimaclaw/data/agents")
+    agents_dir = paths.AGENTS_DIR
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -1953,7 +1954,7 @@ def agent_set_llm(
     import json
     from pathlib import Path
 
-    agents_dir = Path("/opt/heimaclaw/data/agents")
+    agents_dir = paths.AGENTS_DIR
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -2024,7 +2025,7 @@ def agent_set_vision(
     import json
     from pathlib import Path
 
-    agents_dir = Path("/opt/heimaclaw/data/agents")
+    agents_dir = paths.AGENTS_DIR
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -2101,7 +2102,7 @@ def agent_set_policy(
         raise typer.Exit(1)
 
     # 查找 Agent 配置
-    agents_dir = Path("/opt/heimaclaw/data/agents")
+    agents_dir = paths.AGENTS_DIR
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -2149,7 +2150,7 @@ def agent_show_policy(
     from rich.table import Table
 
     # 查找 Agent 配置
-    agents_dir = Path("/opt/heimaclaw/data/agents")
+    agents_dir = paths.AGENTS_DIR
     if not agents_dir.exists():
         agents_dir = Path.home() / ".heimaclaw" / "agents"
 
@@ -2222,7 +2223,7 @@ def stop_command(
 
     title("停止 HeiMaClaw 服务")
 
-    run_dir = Path("/opt/heimaclaw/run")
+    run_dir = paths.get_run_dir()
     if not run_dir.exists():
         run_dir = Path.home() / ".heimaclaw" / "run"
         
@@ -2273,7 +2274,7 @@ def restart_command(
 
     title("重启 HeiMaClaw 服务")
 
-    run_dir = Path("/opt/heimaclaw/run")
+    run_dir = paths.get_run_dir()
     if not run_dir.exists():
         run_dir = Path.home() / ".heimaclaw" / "run"
         
@@ -2361,7 +2362,7 @@ def log_command(
     log_paths = [
         Path("/tmp/heimaclaw.log"),
         Path.home() / ".heimaclaw" / "logs" / "heimaclaw.log",
-        Path("/opt/heimaclaw/logs/heimaclaw.log"),
+        paths.get_log_dir() / "heimaclaw.log",
     ]
 
     log_file = None

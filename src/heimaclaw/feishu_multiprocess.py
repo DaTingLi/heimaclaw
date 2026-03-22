@@ -5,6 +5,7 @@
 工业级方案：支持多 Agent + 多飞书 App 真正并行。
 """
 
+import heimaclaw.paths as paths
 import asyncio
 import json
 import multiprocessing as mp
@@ -313,7 +314,7 @@ class MultiProcessFeishuService:
         # 优先从 ~/.heimaclaw/agents/ 加载
         agents_dir = Path.home() / ".heimaclaw" / "agents"
         if not agents_dir.exists():
-            agents_dir = Path("/opt/heimaclaw/data/agents")
+            agents_dir = paths.AGENTS_DIR
         
         if not agents_dir.exists():
             warning("未找到 Agent 配置目录")

@@ -13,6 +13,7 @@ name = "产品经理1号"
 enabled = true
 """
 
+import heimaclaw.paths as paths
 from pathlib import Path
 from typing import Optional
 
@@ -160,11 +161,11 @@ class Config(BaseModel):
 class ConfigLoader:
     """配置加载器"""
 
-    # 配置路径优先级（开发优先，安装其次）
+    # 配置路径优先级（安装目录优先，用户覆盖）
     DEFAULT_PATHS = [
-        Path(__file__).parent.parent.parent.parent / "config" / "config.toml",  # 项目源码 config/
-        Path("/opt/heimaclaw/config/config.toml"),  # 安装目录
+        paths.CONFIG_FILE,  # 安装目录（优先）
         Path.home() / ".heimaclaw" / "config.toml",  # 用户目录
+        Path(__file__).parent.parent.parent.parent / "config" / "config.toml",  # 项目源码 config/
         Path.cwd() / "config.toml",  # 当前目录
     ]
 
@@ -235,6 +236,7 @@ class ConfigLoader:
             sandbox=SandboxConfig(**raw.get("sandbox", {})),
             channels=channels_config,
             logging=LoggingConfig(**raw.get("logging", {})),
+            vision=VisionConfig(**raw.get("vision", {})),
         )
 
     def save(self, config: Config, path: Optional[Path] = None) -> None:
@@ -326,14 +328,14 @@ def start_config_watcher():
     if _watcher_started:
         return
 
-    from pathlib import Path
+    
 
     from heimaclaw.config.watcher import start_watcher
     from heimaclaw.console import info
 
     # 监听所有默认配置路径
     watch_paths = [
-        Path("/opt/heimaclaw/config"),
+        paths.CONFIG_DIR,
         Path.home() / ".heimaclaw",
     ]
 

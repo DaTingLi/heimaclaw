@@ -4,6 +4,7 @@ Firecracker 沙箱后端
 通过 Firecracker microVM 实现硬件级隔离。
 """
 
+import heimaclaw.paths as paths
 import asyncio
 import json
 import os
@@ -38,7 +39,7 @@ class FirecrackerBackend(SandboxBackend):
         jailer_path: str = "jailer",
         rootfs_path: Optional[str] = None,
         kernel_path: Optional[str] = None,
-        work_dir: str = "/opt/heimaclaw/sandboxes",
+        work_dir: str = str(paths.SANDBOX_DIR),
     ):
         """
         初始化 Firecracker 后端
@@ -52,8 +53,8 @@ class FirecrackerBackend(SandboxBackend):
         """
         self.firecracker_path = firecracker_path
         self.jailer_path = jailer_path
-        self.rootfs_path = rootfs_path or "/opt/heimaclaw/images/rootfs.ext4"
-        self.kernel_path = kernel_path or "/opt/heimaclaw/images/vmlinux"
+        self.rootfs_path = rootfs_path or str(paths.ROOTFS_PATH)
+        self.kernel_path = kernel_path or str(paths.KERNEL_PATH)
         self.work_dir = Path(work_dir)
 
         self._instances: dict[str, InstanceInfo] = {}

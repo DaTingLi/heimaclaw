@@ -4,6 +4,7 @@
 管理 Agent 会话的生命周期、状态持久化。
 """
 
+import heimaclaw.paths as paths
 import asyncio
 import json
 import time
@@ -107,7 +108,7 @@ class SessionManager:
 
     def __init__(
         self,
-        data_dir: str = "/opt/heimaclaw/data/sessions",
+        data_dir: str = str(paths.SESSION_DIR),
         auto_save: bool = True,
     ):
         """

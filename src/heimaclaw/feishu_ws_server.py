@@ -4,6 +4,7 @@
 独立的飞书长连接服务，支持 1 Agent = 1 Bot。
 """
 
+import heimaclaw.paths as paths
 import asyncio
 import json
 from typing import Optional
@@ -34,7 +35,7 @@ async def load_agents(default_feishu_config: dict) -> None:
 
     agents_dir = Path.home() / ".heimaclaw" / "agents"
     if not agents_dir.exists():
-        agents_dir = Path("/opt/heimaclaw/data/agents")
+        agents_dir = paths.AGENTS_DIR
         if not agents_dir.exists():
             info("暂无 Agent 配置")
             return
