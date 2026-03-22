@@ -97,6 +97,9 @@ class Planner:
 {tools_json}
 
 请规划执行步骤。规则：
+0. **创建飞书文档/表格**：如果用户要求创建飞书文档、飞书表格、在线文档等，使用 create_feishu_doc 工具：
+   - 参数：{{"type": "doc", "title": "文档标题"}} 或 {{"type": "sheet", "title": "表格标题"}}
+   - 注意：只需要 title 参数，folder_token 可选
 1. 如果需要运行 Python 文件，先用 exec 执行 cat 读取文件内容
 2. 如果文件需要依赖（如 flask），用 exec 执行 pip install 和 python 命令
 3. 如果要运行长期运行的程序（如Flask、HTTP服务），必须使用后台执行：
@@ -111,6 +114,7 @@ class Planner:
 - subagent_task 必须是 "执行命令: <具体shell命令>" 格式，不能是描述！
 - 示例：subagent_task: "执行命令: cd /tmp && pip install flask -q && nohup python hello.py > app.log 2>&1 &"
 - 只有 "读取文件"、"查看" 等只读操作才能用 execution_mode="direct"
+- create_feishu_doc 工具使用 execution_mode="direct"
 
 返回 JSON：
 {{
