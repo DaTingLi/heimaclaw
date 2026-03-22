@@ -31,6 +31,7 @@ class DeepAgentsWrapper:
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         self._agent = None
         self._agent_lock = asyncio.Lock()
+        self._init_task = None
 
     async def initialize(self):
         """异步初始化 Agent"""
@@ -57,7 +58,8 @@ class DeepAgentsWrapper:
                     env=os.environ.copy(),
                     virtual_mode=False,
                 )
-                info("[DeepAgentsWrapper] 使用 FirecrackerDeepAgentsBackend")
+                from heimaclaw.console import console
+                console.print("\n[blue bold][Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行[/blue bold]\n")
             else:
                 from deepagents.backends import LocalShellBackend
                 backend = LocalShellBackend(
@@ -65,7 +67,8 @@ class DeepAgentsWrapper:
                     env=os.environ.copy(),
                     virtual_mode=True,
                 )
-                info("[DeepAgentsWrapper] 使用本地后端 (Fallback)")
+                from heimaclaw.console import console
+                console.print("\n[magenta bold][Sandbox: Local Process] 正在使用本地子进程执行（无沙箱隔离）[/magenta bold]\n")
 
             self._agent = create_deep_agent(
                 model=llm,
@@ -80,23 +83,58 @@ class DeepAgentsWrapper:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    future = asyncio.ensure_future(self.initialize())
-                    loop.run_until_complete(future)
+                    # Already in async context - just ensure the coroutine runs
+                    if not hasattr(self, '_init_task') or self._init_task is None or self._init_task.done():
+                        self._init_task = asyncio.ensure_future(self.initialize())
+                        # Don't block - let it run in background
+                        print("[DeepAgentsWrapper] 初始化已在后台启动", flush=True)
                 else:
                     loop.run_until_complete(self.initialize())
             except RuntimeError:
                 asyncio.run(self.initialize())
+            except Exception as e:
+                print(f"[DeepAgentsWrapper] 初始化异常: {e}", flush=True)
 
     def execute(self, user_message: str, history: list = None) -> str:
         """执行 Agent"""
+        import sys
+        print(f"[DeepAgentsWrapper.execute] 调用, user_message={user_message[:30]}...", flush=True, file=sys.stderr)
         self._ensure_initialized()
-        history = history or []
+        if self._agent is None:
+            print("[DeepAgentsWrapper.execute] _agent still None after _ensure_initialized!", flush=True, file=sys.stderr)
+            return "Agent 初始化失败"
+        
+        # 组装 messages
+        messages = []
+        if history:
+            messages.extend(history)
+        
+        # 添加当前用户消息
+        if user_message:
+            messages.append(("human", user_message))
+            
         try:
+            print(f"[DeepAgentsWrapper.execute] 调用 _agent.invoke, messages长度={len(messages)}", flush=True, file=sys.stderr)
             result = self._agent.invoke(
-                {"input": user_message, "chat_history": history}
+                {"messages": messages}
             )
-            return result.get("output", "")
+            print(f"[DeepAgentsWrapper.execute] invoke完成, result类型={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}", flush=True, file=sys.stderr)
+            # DeepAgents 返回格式可能是 {'messages': [...]} 或 {'output': '...'}
+            if isinstance(result, dict):
+                if 'output' in result:
+                    return result.get('output', '')
+                elif 'messages' in result:
+                    msgs = result['messages']
+                    if msgs and len(msgs) > 0:
+                        last_msg = msgs[-1]
+                        if hasattr(last_msg, 'content'):
+                            return last_msg.content
+                        elif isinstance(last_msg, dict):
+                            return last_msg.get('content', '')
+            return str(result)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             error(f"[DeepAgentsWrapper] 执行错误: {e}")
             return f"执行错误: {e}"
 
@@ -115,10 +153,17 @@ class DeepAgentsWrapper:
             print("[DeepAgentsWrapper.run] 历史为空，返回空字符串", flush=True, file=sys.stderr)
             return ""
 
-        # 从历史中提取最后一条用户消息
-        user_message = ""
+        # 从历史中提取最后一条用户消息，前面的全部作为历史
+        last_msg = history[-1]
+        user_message = last_msg.get("content", "")
+        if isinstance(user_message, list):
+            user_message = "\n".join(
+                item.get("text", str(item)) if isinstance(item, dict) else str(item)
+                for item in user_message
+            )
+
         chat_history = []
-        for msg in history:
+        for msg in history[:-1]:
             role = msg.get("role", "")
             content = msg.get("content", "")
             if isinstance(content, list):
@@ -126,10 +171,12 @@ class DeepAgentsWrapper:
                     item.get("text", str(item)) if isinstance(item, dict) else str(item)
                     for item in content
                 )
-            if role == "user":
-                user_message = content
-            elif role == "assistant":
-                chat_history.append({"role": "assistant", "content": content})
+            
+            # Langchain 接收 tuples 作为 message
+            if role in ["user", "human"]:
+                chat_history.append(("human", content))
+            elif role in ["assistant", "ai"]:
+                chat_history.append(("ai", content))
 
         print(f"[DeepAgentsWrapper.run] user_msg={user_message[:50]}...", flush=True, file=sys.stderr)
         return self.execute(user_message, history=chat_history)

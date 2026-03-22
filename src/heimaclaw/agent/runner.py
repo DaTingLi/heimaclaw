@@ -125,6 +125,17 @@ def _register_all_tools():
         parameters=write_todos_def["parameters"],
         timeout_ms=5000,
     )
+    from heimaclaw.agent.tools.upload_tool import get_upload_image_definition, upload_image_handler
+
+    upload_def = get_upload_image_definition()
+    registry.register(
+        name=upload_def["name"],
+        description=upload_def["description"],
+        handler=upload_image_handler,
+        parameters=upload_def["parameters"],
+        timeout_ms=10000,
+    )
+    print(f"注册工具: {upload_def['name']} (async=False)")
 
 
 class AgentRunner:
@@ -584,7 +595,11 @@ class AgentRunner:
                 if len(history) > MAX_DEEPAGENTS_HISTORY:
                     print(f"[Runner] 历史消息已压缩: {len(history)} -> {len(history_for_deepagents)} 条")
                 print(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history_for_deepagents)} 条")
-                result = await self._deep_agent.run(history_for_deepagents)
+                
+                import asyncio
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, self._deep_agent.run, history_for_deepagents)
+                
                 print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
                 return result
             except Exception as e:
