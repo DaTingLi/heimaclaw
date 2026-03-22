@@ -2,7 +2,7 @@
 provider = "openai"
 model = "glm-5"
 base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
-api_key = "7dea35ded52043a683b875bae5a31213.uXrxigWPdXxBQHo0"
+api_key = ""
 max_tokens = 4096
 temperature = 0.7
 
@@ -15,8 +15,8 @@ timeout = 60
 max_retries = 3
 
 [channels.feishu]
-app_id = "cli_a9301fec40395bde"
-app_secret = "EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
+app_id = ""
+app_secret = ""
 
 [sandbox]
 enabled = true

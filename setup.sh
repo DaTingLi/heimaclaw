@@ -8,7 +8,7 @@
 #============================================
 
 #========= LLM 配置 =========
-LLM_API_KEY="7dea35ded52043a683b875bae5a31213.uXrxigWPdXxBQHo0"
+LLM_API_KEY="your_llm_api_key_here"
 LLM_MODEL="glm-5"
 LLM_BASE_URL="https://open.bigmodel.cn/api/coding/paas/v4"
 
@@ -19,8 +19,8 @@ VISION_MODEL="glm-4v"
 VISION_BASE_URL="https://open.bigmodel.cn/api/coding/paas/v4"
 
 #========= 飞书配置 =========
-FEISHU_APP_ID="cli_a9301fec40395bde"
-FEISHU_APP_SECRET="EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
+FEISHU_APP_ID="cli_your_feishu_app_id"
+FEISHU_APP_SECRET=""
 
 #============================================
 # 以下内容不需要修改

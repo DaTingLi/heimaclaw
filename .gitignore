@@ -70,3 +70,7 @@ data/
 logs/
 sandboxes/
 standards_backup/
+-e 
+# Local config files (contain secrets)
+config/config.toml
+config/*.toml
