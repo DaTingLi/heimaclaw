@@ -116,18 +116,30 @@ class FeishuWorker(mp.Process):
         async def message_handler(message: InboundMessage) -> None:
             try:
                 # 【关键】群聊时检查是否 @mentioned 当前机器人
+                # 使用双向模糊匹配，自动适配不同命名的机器人
                 if message.chat_type == "group":
                     bot_mentioned = False
-                    # 检查 mentions 列表
+                    display_lower = self.agent_info.display_name.lower()
+                    
+                    # 方法1: 检查 mentions 列表（飞书 SDK 提供的被 @ 名称列表）
                     if message.mentions:
                         for mention in message.mentions:
-                            if self.agent_info.display_name.lower() in mention.lower():
+                            mention_lower = mention.lower()
+                            # 双向包含检查：display_name in mention OR mention in display_name
+                            if display_lower in mention_lower or mention_lower in display_lower:
                                 bot_mentioned = True
                                 break
-                    # 也检查消息内容是否包含机器人名称（飞书 sometimes puts it in content）
-                    content_lower = message.content.lower()
-                    if self.agent_info.display_name.lower() in content_lower:
-                        bot_mentioned = True
+                    
+                    # 方法2: 检查消息内容中的 @mention 模式
+                    if not bot_mentioned:
+                        import re
+                        content_lower = message.content.lower()
+                        # 匹配 @后面跟字母数字下划线的模式
+                        mentions_found = re.findall(r'@([a-z0-9_]+)', content_lower)
+                        for mentioned_name in mentions_found:
+                            if display_lower in mentioned_name or mentioned_name in display_lower:
+                                bot_mentioned = True
+                                break
                     
                     if not bot_mentioned:
                         # 群聊但没有被 @，跳过处理
