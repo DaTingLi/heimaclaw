@@ -14,6 +14,7 @@ from langchain_openai import ChatOpenAI
 
 from heimaclaw.agent.system_prompt import SYSTEM_PROMPT
 from heimaclaw.agent.firecracker_deepagents_backend import FirecrackerDeepAgentsBackend
+from heimaclaw.agent.docker_deepagents_backend import DockerDeepAgentsBackend
 from heimaclaw.console import info, error
 
 
@@ -53,15 +54,26 @@ class DeepAgentsWrapper:
             registry = get_tool_registry()
 
             if registry.sandbox_backend and registry.sandbox_instance_id:
-                backend = FirecrackerDeepAgentsBackend(
-                    root_dir="/root/heimaclaw_workspace",
-                    sandbox_backend=registry.sandbox_backend,
-                    instance_id=registry.sandbox_instance_id,
-                    env=os.environ.copy(),
-                    virtual_mode=False,
-                )
-                from heimaclaw.console import console
-                console.print("\n[blue bold][Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行[/blue bold]\n")
+                backend_type = getattr(registry.sandbox_backend, 'backend_type', 'firecracker')
+                if backend_type == 'docker':
+                    backend = DockerDeepAgentsBackend(
+                        root_dir="/root/heimaclaw_workspace",
+                        docker_backend=registry.sandbox_backend,
+                        instance_id=registry.sandbox_instance_id,
+                        env=os.environ.copy(),
+                    )
+                    from heimaclaw.console import console
+                    console.print("\n[blue bold][Sandbox: Docker] 正在使用 Docker 容器隔离执行[/blue bold]\n")
+                else:
+                    backend = FirecrackerDeepAgentsBackend(
+                        root_dir="/root/heimaclaw_workspace",
+                        sandbox_backend=registry.sandbox_backend,
+                        instance_id=registry.sandbox_instance_id,
+                        env=os.environ.copy(),
+                        virtual_mode=False,
+                    )
+                    from heimaclaw.console import console
+                    console.print("\n[blue bold][Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行[/blue bold]\n")
             else:
                 from deepagents.backends import LocalShellBackend
                 backend = LocalShellBackend(
