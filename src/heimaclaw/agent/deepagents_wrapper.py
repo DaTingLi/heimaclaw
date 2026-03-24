@@ -186,11 +186,20 @@ class DeepAgentsWrapper:
         for msg in history[:-1]:
             role = msg.get("role", "")
             content = msg.get("content", "")
-            if isinstance(content, list):
+            # 处理 content 为 None 或非字符串类型的情况
+            if content is None:
+                content = ""
+            elif isinstance(content, list):
                 content = "\n".join(
                     item.get("text", str(item)) if isinstance(item, dict) else str(item)
                     for item in content
                 )
+            elif not isinstance(content, str):
+                content = str(content)
+            
+            # 跳过空内容的消息
+            if not content.strip():
+                continue
             
             # Langchain 接收 tuples 作为 message
             if role in ["user", "human"]:

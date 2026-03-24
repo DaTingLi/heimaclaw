@@ -94,6 +94,7 @@ class DockerSandboxBackend(SandboxBackend):
         memory_mb: int = 128,
         cpu_count: int = 1,
         snapshot_id: Optional[str] = None,
+        preferred_port: int = None,
     ) -> InstanceInfo:
         """
         创建沙箱实例
@@ -103,6 +104,7 @@ class DockerSandboxBackend(SandboxBackend):
             memory_mb: 内存大小
             cpu_count: CPU 核心数
             snapshot_id: 快照 ID (未实现)
+            preferred_port: 优先使用的宿主机端口（用户指定）
             
         Returns:
             InstanceInfo
@@ -128,7 +130,7 @@ class DockerSandboxBackend(SandboxBackend):
             deps = analyzer.analyze(project_dir)
             
             # 分配端口
-            host_port = port_pool.allocate(project_name, 5000)
+            host_port = port_pool.allocate(project_name, 5000, preferred_port)
             
             # 构建镜像（如果需要）
             image_name = self.base_image

@@ -11,14 +11,14 @@ from heimaclaw.console import info, error
 # 工具定义
 DOCKER_TOOL_DEFINITION = {
     "name": "docker_project",
-    "description": "Docker 项目管理工具 - 列出、查看、启动、停止、删除 Docker 容器化项目",
+    "description": "Docker 项目管理工具 - 列出、查看、部署、启动、停止、删除 Docker 容器化项目",
     "parameters": {
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
                 "description": "操作类型: list_projects, get_project, start, stop, delete, recover, logs, stats",
-                "enum": ["list_projects", "get_project", "start", "stop", "delete", "recover", "logs", "stats"]
+                "enum": ["list_projects", "get_project", "start", "stop", "delete", "recover", "logs", "stats", "deploy"]
             },
             "project_name": {
                 "type": "string",
@@ -33,6 +33,10 @@ DOCKER_TOOL_DEFINITION = {
                 "type": "boolean",
                 "description": "是否强制删除（跳过冷静期）",
                 "default": False
+            },
+            "port": {
+                "type": "integer",
+                "description": "指定的宿主机端口（可选，不指定则自动分配）"
             }
         },
         "required": ["action"]
@@ -168,7 +172,7 @@ def docker_project_handler(args: dict) -> dict:
                 }
             }
         
-        elif action in ("start", "stop", "delete", "recover"):
+        elif action in ("start", "stop", "delete", "recover", "deploy"):
             # 需要异步操作
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -192,6 +196,34 @@ def docker_project_handler(args: dict) -> dict:
                         return {"success": True, "output": f"项目已恢复: {project_name}"}
                     else:
                         return {"success": False, "output": f"项目恢复失败: {project_name}"}
+                
+                elif action == "deploy":
+                    # 部署项目（支持指定端口）
+                    preferred_port = args.get("port")
+                    
+                    # 获取或创建容器
+                    async def _deploy():
+                        container = await container_pool.get_container(project_name, preferred_port=preferred_port)
+                        await container.ensure()
+                        return container
+                    
+                    container = loop.run_until_complete(_deploy())
+                    
+                    # 获取端口映射
+                    ports_info = []
+                    for cp, hp in container.host_ports.items():
+                        ports_info.append(f"{hp}→{cp}")
+                    ports_str = ", ".join(ports_info) if ports_info else "-"
+                    
+                    output = f"""项目 {project_name} 部署成功！
+
+**端口映射**: {ports_str}
+
+**访问地址**: http://<宿主机IP>:{container.host_ports.get(5000, 'N/A')}/
+
+**状态**: {container.status.value if hasattr(container.status, 'value') else container.status}"""
+                    
+                    return {"success": True, "output": output, "ports": container.host_ports}
             
             finally:
                 loop.close()

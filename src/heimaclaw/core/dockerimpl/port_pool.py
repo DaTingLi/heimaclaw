@@ -111,6 +111,7 @@ class PortPool:
         self,
         project_name: str,
         container_port: int = 5000,
+        preferred_port: int = None,
     ) -> int:
         """
         为项目分配宿主机端口
@@ -118,6 +119,7 @@ class PortPool:
         Args:
             project_name: 项目名称
             container_port: 容器内部端口
+            preferred_port: 优先使用的宿主机端口（用户指定）
             
         Returns:
             分配的宿主机端口
@@ -127,8 +129,16 @@ class PortPool:
             if container_port in self._allocations[project_name]:
                 return self._allocations[project_name][container_port]
         
-        # 分配新端口
-        host_port = self._find_available_port(container_port)
+        # 如果指定了优先端口，尝试使用
+        if preferred_port:
+            if preferred_port in self._reserved:
+                raise RuntimeError(f"端口 {preferred_port} 已被占用，请选择其他端口")
+            if self._is_port_in_use(preferred_port):
+                raise RuntimeError(f"端口 {preferred_port} 已被系统占用，请选择其他端口")
+            host_port = preferred_port
+        else:
+            # 分配新端口
+            host_port = self._find_available_port(container_port)
         
         # 记录分配
         if project_name not in self._allocations:

@@ -35,6 +35,7 @@ class ContainerConfig:
     workspace_path: Path = None
     exposed_ports: list[int] = None
     environment: dict = None
+    preferred_port: int = None  # 优先使用的宿主机端口
 
 
 @dataclass
@@ -144,7 +145,15 @@ class ProjectContainer:
             
             # 2. 分配端口
             for container_port in (self.config.exposed_ports or [5000]):
-                host_port = self.port_pool.allocate(self.config.project_name, container_port)
+                if container_port == 5000 and self.config.preferred_port:
+                    # 使用用户指定的优先端口
+                    host_port = self.port_pool.allocate(
+                        self.config.project_name, 
+                        container_port,
+                        preferred_port=self.config.preferred_port
+                    )
+                else:
+                    host_port = self.port_pool.allocate(self.config.project_name, container_port)
                 self.host_ports[container_port] = host_port
             
             # 3. 创建容器
@@ -427,8 +436,13 @@ class ContainerPool:
         self._dependency_analyzer = get_dependency_analyzer()
         self._snapshot_manager = get_snapshot_manager()
     
-    async def get_container(self, project_name: str) -> ProjectContainer:
-        """获取或创建项目容器"""
+    async def get_container(self, project_name: str, preferred_port: int = None) -> ProjectContainer:
+        """获取或创建项目容器
+        
+        Args:
+            project_name: 项目名称
+            preferred_port: 优先使用的宿主机端口（用户指定）
+        """
         async with self._lock:
             if project_name not in self._containers:
                 # 检查是否达到上限
@@ -447,6 +461,7 @@ class ContainerPool:
                 config = ContainerConfig(
                     project_name=project_name,
                     workspace_path=self.workspace / project_name,
+                    preferred_port=preferred_port,
                 )
                 
                 self._containers[project_name] = ProjectContainer(
