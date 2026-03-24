@@ -57,6 +57,10 @@ class AgentConfig(BaseModel):
     model_provider: str = Field(default="openai", description="模型提供商")
     model_name: str = Field(default="gpt-4", description="模型名称")
     sandbox_enabled: bool = Field(default=True, description="是否启用沙箱")
+    sandbox_backend_type: SandboxBackend = Field(
+        default=SandboxBackend.FIRECRACKER,
+        description="沙箱后端类型: firecracker, docker, process"
+    )
     sandbox_memory_mb: int = Field(default=128, description="沙箱内存")
     sandbox_cpu_count: int = Field(default=1, description="沙箱 CPU 核心数")
     context_mode: str = Field(

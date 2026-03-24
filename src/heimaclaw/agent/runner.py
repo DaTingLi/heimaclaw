@@ -151,6 +151,17 @@ def _register_all_tools():
     )
     print(f"注册工具: {FEISHU_DOC_TOOL_DEFINITION['name']} (async=False)")
 
+    # docker_project 工具
+    from heimaclaw.agent.tools.docker_tool import DOCKER_TOOL_DEFINITION, docker_project_handler
+    registry.register(
+        name=DOCKER_TOOL_DEFINITION["name"],
+        description=DOCKER_TOOL_DEFINITION["description"],
+        handler=docker_project_handler,
+        parameters=DOCKER_TOOL_DEFINITION["parameters"],
+        timeout_ms=30000,
+    )
+    print(f"注册工具: {DOCKER_TOOL_DEFINITION['name']} (async=False)")
+
 
 class AgentRunner:
     """
@@ -497,8 +508,19 @@ class AgentRunner:
     async def _initialize_sandbox(self) -> None:
         """初始化沙箱实例"""
         if not self.sandbox_backend:
-            # 使用默认 Firecracker 后端
-            self.sandbox_backend = FirecrackerBackend()
+            # 根据配置选择沙箱后端
+            from heimaclaw.interfaces import SandboxBackend
+            from heimaclaw.sandbox import DockerSandboxBackend
+            
+            backend_type = getattr(self.config, 'sandbox_backend_type', SandboxBackend.FIRECRACKER)
+            
+            if backend_type == SandboxBackend.DOCKER:
+                info("使用 Docker 沙箱后端")
+                self.sandbox_backend = DockerSandboxBackend()
+            else:
+                # 默认使用 Firecracker
+                self.sandbox_backend = FirecrackerBackend()
+            
             await self.sandbox_backend.initialize()
 
         # 从预热池获取或创建实例
