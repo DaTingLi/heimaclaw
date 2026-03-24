@@ -16,7 +16,7 @@ from heimaclaw.channel.base import InboundMessage
 from heimaclaw.channel.feishu_ws import FeishuWebSocketAdapter
 from heimaclaw.config.loader import get_config
 from heimaclaw.console import error, info
-from heimaclaw.interfaces import AgentConfig, ChannelType
+from heimaclaw.interfaces import AgentConfig, ChannelType, SandboxBackend
 
 # 全局状态
 _agents: dict[str, AgentRunner] = {}
@@ -72,7 +72,8 @@ async def load_agents(default_feishu_config: dict) -> None:
                     channel=ChannelType.FEISHU,
                     model_provider=agent_data.get("llm", {}).get("provider", "zhipu"),
                     model_name=agent_data.get("llm", {}).get("model_name", "glm-4"),
-                    sandbox_enabled=agent_data.get("sandbox", {}).get("enabled", False),
+                    sandbox_enabled=agent_data.get("sandbox", {}).get("enabled", True),
+                    sandbox_backend_type=SandboxBackend(agent_data.get("sandbox", {}).get("type", "firecracker")),
                 ),
                 session_manager=session_manager,
                 llm_config=agent_data.get("llm", {}),

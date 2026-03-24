@@ -27,7 +27,7 @@ except RuntimeError:
     pass  # 已设置
 
 from heimaclaw.agent.router import AgentRouter
-from heimaclaw.interfaces import AgentConfig, ChannelType
+from heimaclaw.interfaces import AgentConfig, ChannelType, SandboxBackend
 from heimaclaw.agent.runner import AgentRunner
 from heimaclaw.agent.session import SessionManager
 from heimaclaw.channel.base import InboundMessage
@@ -45,6 +45,7 @@ class AgentInfo:
     app_secret: str
     llm_config: dict
     sandbox_enabled: bool
+    sandbox_type: str  # "firecracker", "docker", "process"
     workspace: str
 
 
@@ -132,6 +133,7 @@ class FeishuWorker(mp.Process):
                 model_provider=self.agent_info.llm_config.get("provider", "zhipu"),
                 model_name=self.agent_info.llm_config.get("model_name", "glm-4"),
                 sandbox_enabled=self.agent_info.sandbox_enabled,
+                sandbox_backend_type=SandboxBackend(getattr(self.agent_info, 'sandbox_type', "docker")),
             ),
             session_manager=session_manager,
             llm_config=self.agent_info.llm_config,
@@ -374,7 +376,8 @@ class MultiProcessFeishuService:
                     app_id=app_id,
                     app_secret=app_secret,
                     llm_config=llm_cfg,
-                    sandbox_enabled=data.get("sandbox", {}).get("enabled", False),
+                    sandbox_enabled=data.get("sandbox", {}).get("enabled", True),
+                    sandbox_type=data.get("sandbox", {}).get("type", "docker"),
                     workspace=str(agent_dir),
                 )
                 agents.append(agent_info)

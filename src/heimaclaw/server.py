@@ -17,7 +17,7 @@ from heimaclaw.channel.feishu import FeishuAdapter
 from heimaclaw.channel.wecom import WeComAdapter
 from heimaclaw.config.loader import get_config
 from heimaclaw.console import error, info, warning
-from heimaclaw.interfaces import AgentConfig, ChannelType
+from heimaclaw.interfaces import AgentConfig, ChannelType, SandboxBackend
 from heimaclaw.server_monitoring import router as monitoring_router
 
 # 全局状态
@@ -65,7 +65,8 @@ async def load_agents() -> None:
                 channel=ChannelType(agent_data.get("channel", "feishu")),
                 model_provider=agent_data.get("llm", {}).get("provider", "openai"),
                 model_name=agent_data.get("llm", {}).get("model_name", "gpt-4"),
-                sandbox_enabled=agent_data.get("sandbox", {}).get("enabled", False),
+                sandbox_enabled=agent_data.get("sandbox", {}).get("enabled", True),
+                sandbox_backend_type=SandboxBackend(agent_data.get("sandbox", {}).get("type", "firecracker")),
             )
 
             # 创建会话管理器

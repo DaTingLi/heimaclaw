@@ -19,7 +19,7 @@ app_id = "cli_a9301fec40395bde"
 app_secret = "EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
 
 [sandbox]
-type = "firecracker"
+type = "docker"
 enabled = true
 memory_mb = 128
 cpu_count = 1
