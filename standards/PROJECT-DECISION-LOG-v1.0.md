@@ -240,3 +240,89 @@
 - **决定**：项目代码位于 /root/dt/ai_coding/heimaclaw
 - **理由**：符合用户指定的生产环境路径规划
 - **影响**：所有路径配置以此为基准, CLI init 命令默认路径为 /opt/heimaclaw（生产部署）
+
+---
+
+## 2026-03-24 晚: Docker 沙箱方案决策
+
+### 背景
+
+在 Firecracker 沙箱开发过程中发现严重局限性：
+
+| 问题 | 说明 |
+|------|------|
+| 环境不完整 | Alpine Linux 无 Flask/SQLite 等基础依赖 |
+| 端口隔离 | 沙箱内端口外部无法访问 |
+| 持久运行受限 | 超时机制无法持续运行服务 |
+| 依赖缺失 | 无法直接执行 Python Web 应用 |
+
+### 决策内容
+
+**采用 Docker 作为项目级隔离方案**
+
+### Docker vs Firecracker 对比
+
+| 维度 | Firecracker | Docker |
+|------|-------------|--------|
+| 环境完整性 | ❌ Alpine | ✅ 完整 Linux |
+| Python 依赖 | ❌ 需手动安装 | ✅ Dockerfile 预装 |
+| Web 服务 | ❌ 无法外部访问 | ✅ 端口映射 |
+| 持久运行 | ⚠️ 超时 | ✅ 可持续 |
+| 资源隔离 | ✅ 轻量 | ✅ 适中 |
+
+### 方案设计
+
+**每个项目 = 独立 Docker 容器**
+
+```
+Host (Ubuntu)
+    │
+    ├── Agent 推理进程
+    │
+    └── Docker Container (项目隔离)
+            │
+            ├── Python 3.10 + Flask + SQLite
+            ├── /root/heimaclaw_workspace/<project>/
+            └── 端口映射 (5000 → Host:5001)
+```
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `standards/DOCKER-SANDBOX-ARCHITECTURE-v1.0.md` | Docker 方案完整设计 |
+
+### 实施计划
+
+**第一阶段**：基础设施
+- 创建 `docker/` 目录和 Dockerfile
+- 实现 `DockerBackend` 类
+- 实现 `PortManager` 类
+
+**第二阶段**：核心功能
+- 容器生命周期管理
+- 命令执行
+- 端口映射
+- 卷挂载
+
+**第三阶段**：集成测试
+- 与 Agent Runner 集成
+- 部署任务测试
+
+### Git 分支
+
+```
+docker-sandbox  ← 当前分支（新方案）
+firecracker-sandbox  ← Firecracker 方案（保留）
+master  ← 稳定版本
+```
+
+### 原则
+
+1. **不修改其他核心代码** - docker-sandbox 分支只做 Docker 方案
+2. **Standards 先行** - 先文档，后实现
+3. **可切换** - 保留 Firecracker 作为可选后端
+
+---
+
+_决策时间: 2026-03-24 18:50_
