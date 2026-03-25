@@ -140,6 +140,19 @@ class FeishuWebSocketAdapter(ChannelAdapter):
             data: 飞书事件数据
         """
         try:
+            # 调试：打印所有收到的消息事件
+            info(f"[Feishu WS] 收到事件 data_type={type(data).__name__}")
+            info(f"[Feishu WS] data内容: {str(data)[:500]}")
+            
+            # 检查 event 属性
+            if hasattr(data, 'event'):
+                info(f"[Feishu WS] data.event={data.event}")
+            if hasattr(data, 'header'):
+                info(f"[Feishu WS] data.header={data.header}")
+            
+            if not data.event or not data.event.message:
+                info("[Feishu WS] 跳过: 无有效事件或消息")
+                return
             if not data.event or not data.event.message:
                 return
 

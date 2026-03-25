@@ -36,6 +36,7 @@ class ContainerConfig:
     exposed_ports: list[int] = None
     environment: dict = None
     preferred_port: int = None  # 优先使用的宿主机端口
+    network_mode: str = "host"  # 网络模式: "host"(推荐) 或 "bridge"(需要端口映射)
 
 
 @dataclass
@@ -237,9 +238,15 @@ class ProjectContainer:
             "--restart", "unless-stopped",
         ]
         
-        # 添加端口映射
-        for container_port, host_port in self.host_ports.items():
-            cmd.extend(["-p", f"{host_port}:{container_port}"])
+        # 网络模式
+        if self.config.network_mode == "host":
+            cmd.extend(["--net", "host"])
+            # host 模式下不需要端口映射，因为容器直接使用宿主机网络
+            # 只需要记录端口供外部访问时使用（实际映射由宿主机端口决定）
+        else:
+            # bridge 模式：需要显式端口映射
+            for container_port, host_port in self.host_ports.items():
+                cmd.extend(["-p", f"{host_port}:{container_port}"])
         
         # 添加环境变量
         for key, value in env.items():

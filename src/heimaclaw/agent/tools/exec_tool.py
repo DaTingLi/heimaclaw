@@ -2,6 +2,11 @@
 Shell 执行工具
 
 允许 Agent 执行系统命令。
+
+集成 Tool Policy:
+    - 是什么: 三层执行控制机制
+    - 为什么: 安全隔离 + 最小权限 + 可控执行
+    - 何时触发: Agent 执行任意命令时自动检查
 """
 
 import asyncio
@@ -10,15 +15,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-# 危险命令模式（黑名单）
-DANGEROUS_PATTERNS = [
-    r"\brm\s+-[rf]{1,2}\s+/",  # rm -rf / 或类似
-    r"\bdd\s+if=",  # dd 命令
-    r"\bmkfs\b",  # 格式化
-    r"\bshutdown\b",  # 关机
-    r"\breboot\b",  # 重启
-    r":\(\)\s*\{.*\};:",  # fork bomb
-]
+# 导入工具策略
+from heimaclaw.tools.policy import check_command, PolicyAction, ExecutionLayer
 
 
 class ExecTool:
@@ -41,26 +39,59 @@ class ExecTool:
             "required": ["command"],
         }
 
-    def _is_dangerous(self, command: str) -> bool:
-        """检查是否是危险命令"""
-        for pattern in DANGEROUS_PATTERNS:
-            if re.search(pattern, command, re.IGNORECASE):
-                return True
-        return False
-
     async def execute(
         self, command: str, timeout: int = 30, cwd: str = "/tmp"
     ) -> dict[str, Any]:
         """执行 Shell 命令"""
-        # 安全检查
-        if self._is_dangerous(command):
+        
+        # ========== Step 1: Tool Policy 检查 ==========
+        policy_result = check_command(command)
+        
+        if policy_result.action == PolicyAction.DENY:
             return {
                 "success": False,
-                "error": f"危险命令被拒绝: {command[:50]}...",
+                "error": f"[策略拒绝] {policy_result.reason}\n命令: {command[:100]}",
                 "output": "",
                 "exit_code": -1,
+                "policy": str(policy_result),
             }
         
+        if policy_result.action == PolicyAction.ELEVATED:
+            return {
+                "success": False,
+                "error": f"[需要 Elevated 权限] {policy_result.reason}\n命令: {command[:100]}\n\n如需执行，请联系管理员配置 Elevated 权限。",
+                "output": "",
+                "exit_code": -1,
+                "policy": str(policy_result),
+                "requires_elevated": True,
+            }
+        
+        if policy_result.action == PolicyAction.ASK:
+            # 未知工具，打印警告但仍然执行（向后兼容）
+            print(f"[Tool Policy] ⚠️ {policy_result.reason} - 仍尝试执行")
+        
+        # ========== Step 2: 文件存在性预检 ==========
+        pre_check_match = re.match(r'(?:python3?\s+)(.+?\.py)(?:\s|$)', command.strip())
+        if pre_check_match:
+            script_path = pre_check_match.group(1).strip()
+            if not os.path.isabs(script_path):
+                script_abs = os.path.join(os.getcwd(), script_path)
+            else:
+                script_abs = script_path
+            
+            if not os.path.exists(script_abs):
+                err_msg = (
+                    "错误：文件不存在 \"" + script_abs + "\"\n\n"
+                    "建议：先使用 write_file 工具创建文件，再运行。"
+                )
+                return {
+                    "success": False,
+                    "output": err_msg,
+                    "exit_code": 127,
+                    "error": "FILE_NOT_FOUND",
+                }
+
+        # ========== Step 3: 命令执行 ==========
         # 拦截 claude/gemini 等交互式命令，自动后台执行
         cmd_lower = command.lower().strip()
         block_patterns = [r"^claude", r"^gemini"]
@@ -101,6 +132,7 @@ class ExecTool:
                     "output": output,
                     "error": error if proc.returncode != 0 else "",
                     "exit_code": proc.returncode,
+                    "policy": str(policy_result),
                 }
 
             except asyncio.TimeoutError:
@@ -111,10 +143,17 @@ class ExecTool:
                     "error": f"命令执行超时 ({timeout}秒)",
                     "output": "",
                     "exit_code": -1,
+                    "policy": str(policy_result),
                 }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "output": "", "exit_code": -1}
+            return {
+                "success": False,
+                "error": str(e),
+                "output": "",
+                "exit_code": -1,
+                "policy": str(policy_result),
+            }
 
 
 async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> str:
@@ -126,7 +165,6 @@ async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> st
     # 优先使用沙箱执行
     if registry.sandbox_backend and registry.sandbox_instance_id:
         try:
-            # 准备环境变量
             auth_env = {
                 k: os.environ[k] 
                 for k in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"] 
@@ -149,7 +187,6 @@ async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> st
                 
         except Exception as e:
             print(f"[EXEC-SANDBOX] 沙箱执行失败，回退到本地: {e}")
-            # Fallback 到本地执行
     
     # 本地执行 (Fallback)
     print(f"[EXEC-LOCAL] 执行命令: {command[:200]}")
@@ -159,4 +196,4 @@ async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> st
     if result["success"]:
         return result["output"]
     else:
-        return f"错误: {result['error']}\n{result['output']}"
+        return f"错误: {result['error']}\n{result.get('output', '')}"

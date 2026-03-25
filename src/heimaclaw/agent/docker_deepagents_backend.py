@@ -45,7 +45,7 @@ class DockerDeepAgentsBackend(LocalShellBackend):
         
         # 从 instance_id 获取 container_id
         if instance_id in docker_backend._instances:
-            self.container_id = docker_backend._instances[instance_id].container_id
+            self.container_id = docker_backend._instances[instance_id].container_name
         
         info(f"[DockerDeepAgentsBackend] 初始化，实例: {instance_id}, 容器: {self.container_id[:12] if self.container_id else 'N/A'}")
 
@@ -57,46 +57,15 @@ class DockerDeepAgentsBackend(LocalShellBackend):
             timeout_ms=timeout_ms,
         )
 
-    def _local_execute(self, command: str, timeout: int) -> ExecuteResponse:
-        """本地执行（fallback）"""
-        info(f"[Docker-Backend] 回退到本地执行: {command[:50]}...")
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=HOST_WORKSPACE,
-            )
-            return ExecuteResponse(
-                output=result.stdout + ("\n" + result.stderr if result.stderr else ""),
-                exit_code=result.returncode or 0,
-                truncated=False,
-            )
-        except subprocess.TimeoutExpired:
-            return ExecuteResponse(
-                output="",
-                stderr="命令执行超时",
-                exit_code=-1,
-                truncated=False,
-            )
-        except Exception as e:
-            return ExecuteResponse(
-                output="",
-                stderr=f"本地执行失败: {e}",
-                exit_code=1,
-                truncated=False,
-            )
-
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
-        """同步执行 - 优先 Docker 容器，失败则本地"""
+        """同步执行 - 强制 Docker 容器，不允许本地回退"""
         info(f"[Docker-Backend.execute] 实例={self.instance_id}, cmd={command[:50]}...")
 
         timeout_ms = (timeout or 120) * 1000
 
         try:
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 result = loop.run_until_complete(self._do_docker_execute(command, timeout_ms))
             finally:
@@ -109,11 +78,16 @@ class DockerDeepAgentsBackend(LocalShellBackend):
                 truncated=False,
             )
         except Exception as e:
-            error(f"[Docker-Backend.execute] Docker 执行失败，回退本地: {e}")
-            return self._local_execute(command, timeout or 120)
+            error(f"[Docker-Backend.execute] Docker 执行失败: {e}")
+            return ExecuteResponse(
+                output="",
+                stderr=f"[Docker-Backend] Docker 执行失败: {e}",
+                exit_code=1,
+                truncated=False,
+            )
 
     async def aexecute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
-        """异步执行 - 优先 Docker 容器，失败则本地"""
+        """异步执行 - 强制 Docker 容器，不允许本地回退"""
         info(f"[Docker-Backend.aexecute] 实例={self.instance_id}, cmd={command[:50]}...")
 
         timeout_ms = (timeout or 120) * 1000
@@ -127,8 +101,13 @@ class DockerDeepAgentsBackend(LocalShellBackend):
                 truncated=False,
             )
         except Exception as e:
-            error(f"[Docker-Backend.aexecute] Docker 执行失败，回退本地: {e}")
-            return self._local_execute(command, timeout or 120)
+            error(f"[Docker-Backend.aexecute] Docker 执行失败: {e}")
+            return ExecuteResponse(
+                output="",
+                stderr=f"[Docker-Backend] Docker 执行失败: {e}",
+                exit_code=1,
+                truncated=False,
+            )
 
     def get_container_logs(self, lines: int = 100) -> str:
         """获取容器日志"""

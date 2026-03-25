@@ -316,6 +316,7 @@ def start_command(
         heimaclaw start --daemon         # 后台守护进程模式运行
     """
     import os
+    import sys
     import threading
     from pathlib import Path
     
@@ -344,7 +345,6 @@ def start_command(
     if daemon:
         title("启动 HeiMaClaw 服务 (后台模式)")
         import subprocess
-        import sys
         
         # 准备新进程的命令
         cmd = [sys.executable, "-m", "heimaclaw.cli", "start"]
@@ -836,12 +836,23 @@ def config_edit() -> None:
 
 
 @agent_app.command("list")
-def agent_list() -> None:
+def agent_list(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细信息"),
+    show_secrets: bool = typer.Option(False, "--show-secrets", help="显示完整 AppSecret (慎用)"),
+) -> None:
     """
-    列出所有 Agent
+    列出所有 Agent 及其配置状态
+    
+    示例:
+        heimaclaw agent list              # 简洁列表
+        heimaclaw agent list -v           # 详细列表
+        heimaclaw agent list --show-secrets  # 显示完整密钥（慎用）
     """
     import json
+    import re as re_module
     from pathlib import Path
+    from rich.table import Table
+    from rich.panel import Panel
 
     title("Agent 列表")
 
@@ -853,62 +864,602 @@ def agent_list() -> None:
 
     agents = []
     seen_names = set()  # 避免重复
+    agents_detail = {}  # 存储详细信息用于 verbose 模式
     
     for agents_dir in agents_dirs:
         if not agents_dir.exists():
             continue
         for agent_dir in agents_dir.iterdir():
-            if agent_dir.is_dir():
-                config_file = agent_dir / "agent.json"
-                if config_file.exists():
+            if not agent_dir.is_dir():
+                continue
+            config_file = agent_dir / "agent.json"
+            if config_file.exists():
+                try:
                     with open(config_file, encoding="utf-8") as f:
                         config = json.load(f)
-                    name = config.get("name", agent_dir.name)
-                    if name in seen_names:
-                        continue
-                    seen_names.add(name)
-                    
-                    # 获取模型信息
-                    llm_cfg = config.get("llm", {})
-                    model_name = llm_cfg.get("model_name", "-")
-                    
-                    # 获取 display_name
-                    display = config.get("display_name", "-")
-                    
-                    # 获取沙箱状态
-                    sandbox_enabled = config.get("sandbox", {}).get("enabled", False)
-                    sandbox_str = "[green]🔥 Firecracker[/green]" if sandbox_enabled else "[dim]本地进程[/dim]"
-                    
-                    # 判断 Agent 是否正在运行
-                    import os
-                    is_running = False
-                    run_dir = paths.get_run_dir()
-                    if run_dir.exists():
-                        pid_file = run_dir / "heimaclaw.pid"
-                        if pid_file.exists():
-                            try:
-                                pid = int(pid_file.read_text().strip())
-                                if os.path.exists(f"/proc/{pid}"):
-                                    is_running = True
-                            except:
-                                pass
-                    
-                    status_str = "[green]运行中[/green]" if is_running else "[yellow]已配置[/yellow]"
-                    
-                    agents.append(
-                        [
-                            name,
-                            display,
-                            model_name,
-                            status_str,
-                            sandbox_str,
-                        ]
-                    )
-
-    if agents:
-        print_table("Agent 列表", agents, ["名称", "飞书名", "模型", "运行状态", "沙箱"])
+                except:
+                    continue
+                name = config.get("name", agent_dir.name)
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                
+                # 获取模型信息
+                llm_cfg = config.get("llm", {})
+                model_name = llm_cfg.get("model_name", "-")
+                
+                # 获取 display_name
+                display = config.get("display_name", name)
+                
+                # 获取飞书配置
+                feishu_cfg = config.get("feishu", {})
+                app_id = feishu_cfg.get("app_id", "")
+                app_secret = feishu_cfg.get("app_secret", "")
+                
+                # 掩码处理
+                app_id_display = app_id[:10] + "..." if len(app_id) > 10 else (app_id or "❌ 未配置")
+                if app_secret:
+                    app_secret_display = app_secret[:6] + "***" + app_secret[-4:] if len(app_secret) > 12 else "***"
+                else:
+                    app_secret_display = "❌ 未配置"
+                
+                # 验证状态
+                app_id_valid = bool(re_module.match(r'^cli_[a-zA-Z0-9]+$', app_id)) if app_id else False
+                
+                app_id_status = "[green]✅[/green]" if app_id_valid else "[red]❌[/red]"
+                
+                # 获取沙箱状态
+                sandbox_enabled = config.get("sandbox", {}).get("enabled", False)
+                sandbox_type = config.get("sandbox", {}).get("type", "docker")
+                sandbox_str = f"[green]✅ {sandbox_type}[/green]" if sandbox_enabled else "[dim]❌ 禁用[/dim]"
+                
+                # 判断 Agent 是否正在运行
+                import os
+                is_running = False
+                run_dir = paths.get_run_dir()
+                if run_dir.exists():
+                    pid_file = run_dir / "heimaclaw.pid"
+                    if pid_file.exists():
+                        try:
+                            pid = int(pid_file.read_text().strip())
+                            if os.path.exists(f"/proc/{pid}"):
+                                is_running = True
+                        except:
+                            pass
+                
+                status_str = "[green]🟢 运行中[/green]" if is_running else "[yellow]⚠️ 已配置[/yellow]"
+                
+                # 基本模式
+                if not verbose:
+                    agents.append([
+                        name,
+                        display,
+                        model_name,
+                        app_id_status,
+                        status_str,
+                    ])
+                else:
+                    # 详细模式
+                    agents_detail[name] = {
+                        "name": name,
+                        "display": display,
+                        "description": config.get("description", "-"),
+                        "model_name": model_name,
+                        "app_id": app_id,
+                        "app_id_display": app_id_display,
+                        "app_id_valid": app_id_valid,
+                        "app_secret": app_secret if show_secrets else app_secret_display,
+                        "app_secret_valid": len(app_secret) >= 16 if app_secret else False,
+                        "enabled": config.get("enabled", True),
+                        "sandbox_enabled": sandbox_enabled,
+                        "sandbox_type": sandbox_type,
+                        "is_running": is_running,
+                        "config_path": str(config_file),
+                    }
+    
+    if not verbose:
+        # 简洁模式
+        if agents:
+            print_table("Agent 列表", agents, ["名称", "飞书名", "模型", "AppID", "状态"])
+        else:
+            info("暂无 Agent")
     else:
-        info("暂无 Agent")
+        # 详细模式
+        if not agents_detail:
+            info("暂无 Agent")
+            return
+        
+        for name, detail in agents_detail.items():
+            status_icon = "[green]🟢[/green]" if detail["is_running"] else "[yellow]⚠️[/yellow]"
+            
+            # 构建详细面板内容
+            content_lines = [
+                f"[bold]描述:[/bold] {detail['description']}",
+                f"[bold]模型:[/bold] {detail['model_name']}",
+                f"",
+                f"[bold cyan]飞书配置:[/bold cyan]",
+                f"  AppID:     {detail['app_id_display']} {('[green]✅[/green]' if detail['app_id_valid'] else '[red]❌[/red]')}",
+                f"  AppSecret: {detail['app_secret']} {('[green]✅[/green]' if detail['app_secret_valid'] else '[red]❌[/red]')}",
+                f"",
+                f"[bold magenta]沙箱:[/bold magenta]",
+                f"  {'✅ 启用' if detail['sandbox_enabled'] else '❌ 禁用'} ({detail['sandbox_type']})",
+                f"",
+                f"[bold]配置文件:[/bold] {detail['config_path']}",
+            ]
+            
+            panel_content = "\n".join(content_lines)
+            panel = Panel(
+                panel_content,
+                title=f"{status_icon} {name} (显示名: {detail['display']})",
+                style="cyan",
+            )
+            console.print(panel)
+            console.print()
+
+
+
+
+@agent_app.command("validate")
+def agent_validate(
+    agent_name: str = typer.Argument(None, help="指定 Agent 名称（不指定则验证所有）"),
+    fix: bool = typer.Option(False, "--fix", "-f", help="自动修复可修复的问题"),
+) -> None:
+    """
+    验证 Agent 配置的完整性和正确性
+    
+    验证规则:
+    - AppID 格式必须为 cli_ 开头
+    - AppSecret 长度 >= 16
+    - Agent 名称只能包含字母、数字、下划线
+    - Display Name 不能为空
+    - LLM API Key 不能为空
+    - 配置文件必须存在且可读
+    
+    示例:
+        heimaclaw agent validate              # 验证所有 Agent
+        heimaclaw agent validate coder_heima  # 验证指定 Agent
+        heimaclaw agent validate --fix        # 验证并自动修复
+    """
+    import json
+    import re as re_module
+    from pathlib import Path
+    from typing import NamedTuple
+
+    class ValidationResult(NamedTuple):
+        agent_name: str
+        field: str
+        status: str  # "✅", "❌", "⚠️"
+        message: str
+
+    title("Agent 配置验证")
+
+    # 检查两个可能的 Agent 配置目录
+    agents_dirs = [
+        paths.AGENTS_DIR,
+        Path.home() / ".heimaclaw" / "agents",
+    ]
+
+    all_results: list[ValidationResult] = []
+    agents_found = set()
+
+    for agents_dir in agents_dirs:
+        if not agents_dir.exists():
+            continue
+        for agent_dir in agents_dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+                
+            agent_name_str = agent_dir.name
+            
+            # 如果指定了名称，跳过不匹配的
+            if agent_name and agent_name_str != agent_name:
+                continue
+            
+            config_file = agent_dir / "agent.json"
+            
+            # 跳过没有 agent.json 的目录（如 memory、data 等系统目录）
+            if not config_file.exists():
+                continue
+            
+            # 读取配置
+            try:
+                with open(config_file, encoding="utf-8") as f:
+                    config = json.load(f)
+            except json.JSONDecodeError as e:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "配置文件",
+                    "❌",
+                    f"JSON 解析失败: {e}"
+                ))
+                continue
+            except Exception as e:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "配置文件",
+                    "❌",
+                    f"读取失败: {e}"
+                ))
+                continue
+            
+            agents_found.add(agent_name_str)
+            
+            # 1. 验证 Agent 名称
+            name_in_config = config.get("name", "")
+            if not re_module.match(r'^[a-zA-Z0-9_]{2,32}$', name_in_config):
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "Agent 名称",
+                    "❌",
+                    f"无效的名称: '{name_in_config}' (应为 2-32 位字母、数字、下划线)"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "Agent 名称",
+                    "✅",
+                    f"有效: {name_in_config}"
+                ))
+            
+            # 2. 验证 Display Name
+            display_name = config.get("display_name", "")
+            if not display_name or len(display_name.strip()) == 0:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "Display Name",
+                    "⚠️",
+                    "未设置，将使用 Agent 名称"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "Display Name",
+                    "✅",
+                    f"有效: {display_name}"
+                ))
+            
+            # 3. 验证飞书 AppID
+            feishu_cfg = config.get("feishu", {})
+            app_id = feishu_cfg.get("app_id", "")
+            if not app_id:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppID",
+                    "❌",
+                    "未配置飞书 AppID"
+                ))
+            elif not re_module.match(r'^cli_[a-zA-Z0-9]+$', app_id):
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppID",
+                    "❌",
+                    f"格式错误: {app_id} (应以 cli_ 开头)"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppID",
+                    "✅",
+                    f"格式正确: {app_id[:15]}..."
+                ))
+            
+            # 4. 验证飞书 AppSecret
+            app_secret = feishu_cfg.get("app_secret", "")
+            if not app_secret:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppSecret",
+                    "❌",
+                    "未配置飞书 AppSecret"
+                ))
+            elif len(app_secret) < 16:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppSecret",
+                    "❌",
+                    f"长度不足: {len(app_secret)} < 16"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "AppSecret",
+                    "✅",
+                    f"长度: {len(app_secret)} 位"
+                ))
+            
+            # 5. 验证 LLM API Key
+            llm_cfg = config.get("llm", {})
+            api_key = llm_cfg.get("api_key", "")
+            if not api_key:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "LLM API Key",
+                    "❌",
+                    "未配置 LLM API Key"
+                ))
+            elif len(api_key) < 10:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "LLM API Key",
+                    "⚠️",
+                    f"长度可疑: {len(api_key)} < 10"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "LLM API Key",
+                    "✅",
+                    f"已配置 ({len(api_key)} 位)"
+                ))
+            
+            # 6. 验证 LLM 模型
+            model_name = llm_cfg.get("model_name", "")
+            if not model_name:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "LLM 模型",
+                    "⚠️",
+                    "未指定模型"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "LLM 模型",
+                    "✅",
+                    f"使用: {model_name}"
+                ))
+            
+            # 7. 验证 enabled 状态
+            enabled = config.get("enabled", True)
+            if not enabled:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "启用状态",
+                    "⚠️",
+                    "Agent 已禁用"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "启用状态",
+                    "✅",
+                    "正常启用"
+                ))
+            
+            # 8. 验证沙箱配置
+            sandbox_cfg = config.get("sandbox", {})
+            sandbox_enabled = sandbox_cfg.get("enabled", False)
+            sandbox_type = sandbox_cfg.get("type", "docker")
+            valid_types = ["docker", "firecracker", "process"]
+            if sandbox_enabled and sandbox_type not in valid_types:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "沙箱类型",
+                    "⚠️",
+                    f"未知类型: {sandbox_type}"
+                ))
+            else:
+                all_results.append(ValidationResult(
+                    agent_name_str,
+                    "沙箱配置",
+                    "✅",
+                    f"{'启用' if sandbox_enabled else '禁用'} ({sandbox_type})"
+                ))
+
+    # 如果指定了名称但没找到
+    if agent_name and agent_name not in agents_found:
+        error(f"Agent 不存在: {agent_name}")
+        # 搜索相似名称
+        console.print("\n[dim]可用 Agent:[/dim]")
+        for ad in agents_dirs:
+            if ad.exists():
+                for d in ad.iterdir():
+                    if d.is_dir():
+                        console.print(f"  - {d.name}")
+        raise typer.Exit(1)
+
+    # 输出结果
+    if not all_results:
+        info("没有找到需要验证的 Agent")
+        return
+
+    # 按 Agent 分组显示
+    from collections import defaultdict
+    by_agent = defaultdict(list)
+    for r in all_results:
+        by_agent[r.agent_name].append(r)
+
+    for agent_n, results in by_agent.items():
+        console.print(f"\n[bold cyan]▸ {agent_n}[/bold cyan]")
+        for r in results:
+            status_color = "green" if r.status == "✅" else ("red" if r.status == "❌" else "yellow")
+            console.print(f"  {r.status} [{status_color}]{r.field}[/{status_color}]: {r.message}")
+
+    # 汇总统计
+    total = len(all_results)
+    passed = sum(1 for r in all_results if r.status == "✅")
+    warnings = sum(1 for r in all_results if r.status == "⚠️")
+    failed = sum(1 for r in all_results if r.status == "❌")
+
+    console.print()
+    summary = f"总计: [green]✅ {passed}[/green] | [yellow]⚠️ {warnings}[/yellow] | [red]❌ {failed}[/red]"
+    console.print(summary)
+
+    if failed > 0:
+        console.print("\n[red]❌ 验证失败，请修复上述错误后再启动服务[/red]")
+        raise typer.Exit(1)
+    elif warnings > 0:
+        console.print("\n[yellow]⚠️ 验证通过但有警告，建议检查[/yellow]")
+    else:
+        console.print("\n[green]✅ 所有检查通过！[/green]")
+
+
+
+# ==================== Agent CRUD 命令 ====================
+
+
+@agent_app.command("add")
+def agent_add(
+    name: str = typer.Argument(..., help="Agent 名称（字母、数字、下划线）"),
+    display_name: str = typer.Option(None, "--display-name", "-d", help="飞书显示名称"),
+    description: str = typer.Option("", "--description", help="Agent 描述"),
+    app_id: str = typer.Option(..., "--app-id", "-i", help="飞书 AppID (cli_xxx)"),
+    app_secret: str = typer.Option(..., "--app-secret", "-s", help="飞书 AppSecret"),
+    llm_model: str = typer.Option("glm-5", "--llm-model", "-m", help="LLM 模型"),
+    llm_api_key: str = typer.Option("", "--llm-api-key", "-k", help="LLM API Key"),
+    sandbox: bool = typer.Option(True, "--sandbox/--no-sandbox", help="启用/禁用沙箱"),
+) -> None:
+    """
+    创建新 Agent（敏感信息自动加密存储）
+    
+    示例:
+        heimaclaw agent create myagent -i cli_xxx -s xxx -k xxx
+    """
+    from heimaclaw.agent.manager import AgentManager, CreateAgentRequest
+    
+    title(f"创建 Agent: {name}")
+    
+    manager = AgentManager()
+    
+    # 使用名称作为 display_name 如果未指定
+    if not display_name:
+        display_name = name
+    
+    # 创建请求
+    request = CreateAgentRequest(
+        name=name,
+        display_name=display_name,
+        description=description,
+        app_id=app_id,
+        app_secret=app_secret,
+        llm_model=llm_model,
+        llm_api_key=llm_api_key,
+        sandbox_enabled=sandbox,
+    )
+    
+    ok, msg, agent_info = manager.create_agent(request)
+    
+    if ok:
+        success(msg)
+        info(f"配置文件: {agent_info.config_path}")
+    else:
+        error(f"创建失败: {msg}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("update")
+def agent_update(
+    name: str = typer.Argument(..., help="Agent 名称"),
+    display_name: str = typer.Option(None, "--display-name", "-d", help="飞书显示名称"),
+    description: str = typer.Option(None, "--description", help="Agent 描述"),
+    app_id: str = typer.Option(None, "--app-id", "-i", help="飞书 AppID"),
+    app_secret: str = typer.Option(None, "--app-secret", "-s", help="飞书 AppSecret（留空不更新）"),
+    llm_model: str = typer.Option(None, "--llm-model", "-m", help="LLM 模型"),
+    llm_api_key: str = typer.Option(None, "--llm-api-key", "-k", help="LLM API Key"),
+    sandbox: bool = typer.Option(None, "--sandbox/--no-sandbox", help="启用/禁用沙箱"),
+    enable: bool = typer.Option(None, "--enable/--disable", help="启用/禁用 Agent"),
+) -> None:
+    """
+    更新 Agent 配置（敏感信息自动加密存储）
+    
+    示例:
+        heimaclaw agent update myagent -d "My Bot" -s new_secret
+        heimaclaw agent update myagent --disable
+    """
+    from heimaclaw.agent.manager import AgentManager, UpdateAgentRequest
+    
+    title(f"更新 Agent: {name}")
+    
+    manager = AgentManager()
+    
+    # 构建更新请求
+    request = UpdateAgentRequest(
+        display_name=display_name,
+        description=description,
+        app_id=app_id,
+        app_secret=app_secret if app_secret else None,  # None = 不更新
+        llm_model=llm_model,
+        llm_api_key=llm_api_key if llm_api_key else None,
+        sandbox_enabled=sandbox,
+        enabled=enable,
+    )
+    
+    ok, msg = manager.update_agent(name, request)
+    
+    if ok:
+        success(msg)
+    else:
+        error(f"更新失败: {msg}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("delete")
+def agent_delete(
+    name: str = typer.Argument(..., help="Agent 名称"),
+    force: bool = typer.Option(False, "--force", "-f", help="跳过确认直接删除"),
+) -> None:
+    """
+    删除 Agent
+    
+    示例:
+        heimaclaw agent delete myagent
+        heimaclaw agent delete myagent --force
+    """
+    from heimaclaw.agent.manager import AgentManager
+    
+    title(f"删除 Agent: {name}")
+    
+    manager = AgentManager()
+    
+    # 确认删除
+    if not force:
+        warning(f"即将删除 Agent '{name}'，此操作不可恢复！")
+        if not typer.confirm("确认删除？"):
+            info("已取消")
+            return
+    
+    ok, msg = manager.delete_agent(name)
+    
+    if ok:
+        success(msg)
+    else:
+        error(f"删除失败: {msg}")
+        raise typer.Exit(1)
+
+
+@agent_app.command("encrypt")
+def agent_encrypt(
+    name: str = typer.Argument(None, help="Agent 名称（不指定则加密所有）"),
+    all: bool = typer.Option(False, "--all", "-a", help="加密所有 Agent"),
+) -> None:
+    """
+    将敏感信息加密存储
+    
+    示例:
+        heimaclaw agent encrypt myagent     # 加密指定 Agent
+        heimaclaw agent encrypt --all       # 加密所有 Agent
+    """
+    from heimaclaw.agent.manager import AgentManager
+    
+    title("敏感信息加密")
+    
+    manager = AgentManager()
+    
+    if all or not name:
+        # 加密所有
+        success_count, fail_count = manager.encrypt_all()
+        console.print(f"\n[bold]加密完成:[/bold]")
+        console.print(f"  [green]✅ 成功: {success_count}[/green]")
+        console.print(f"  [red]❌ 失败: {fail_count}[/red]")
+    else:
+        # 加密指定
+        ok, msg = manager.encrypt_existing(name)
+        if ok:
+            success(msg)
+        else:
+            error(f"加密失败: {msg}")
+            raise typer.Exit(1)
+
 
 
 # ==================== channel 子命令 ====================
@@ -1711,228 +2262,6 @@ def agent_compile(
 
             if success_count < total_count:
                 raise typer.Exit(1)
-
-
-@agent_app.command("create")
-def agent_create(
-    name: str = typer.Argument(..., help="Agent 名称"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="指定工作空间路径"),
-    sandbox: bool = typer.Option(False, "--sandbox/--no-sandbox", help="是否开启沙箱隔离"),
-    template: str = typer.Option("default", "--template", "-t", help="模板名称"),
-) -> None:
-    """
-    极简创建新 Agent 环境及 Markdown 配置
-
-    示例:
-        heimaclaw agent create my-agent
-        heimaclaw agent create my-agent --workspace ./my_project --sandbox
-    """
-    from pathlib import Path
-
-    # Agent 目录
-    if workspace:
-        agents_dir = Path(workspace)
-    else:
-        agents_dir = Path.cwd()
-        
-    agent_dir = agents_dir / name
-
-    if agent_dir.exists():
-        error(f"Agent '{name}' 已存在于 {agents_dir}")
-        raise typer.Exit(1)
-
-    # 创建目录
-    agent_dir.mkdir(parents=True, exist_ok=True)
-
-    # 创建基础配置
-    base_config = {
-        "name": name,
-        "description": f"{name} Agent",
-        "channel": "feishu",
-        "enabled": True,
-        "sandbox": {"enabled": sandbox, "memory_mb": 128, "cpu_count": 1},
-        "llm": {
-            "provider": "zhipu",
-            "model_name": "glm-4",
-            "api_key": "de4e3dc9f9d14c75bb2b4a38df59b2b9.CuO0DXKvTfYWVhVu",
-            "temperature": 0.7,
-            "max_tokens": 8192,
-        },
-    }
-
-    import json
-
-    config_file = agent_dir / "agent.json"
-    config_file.write_text(
-        json.dumps(base_config, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-    # 创建示例 Markdown 配置
-    create_sample_markdown_configs(agent_dir, name)
-
-    success(f"Agent '{name}' 创建成功")
-    info(f"位置: {agent_dir}")
-    info("下一步:")
-    info("  1. 编辑配置文件（SOUL.md, TOOLS.md, IDENTITY.md 等）")
-    info(f"  2. 运行 'heimaclaw agent compile {name}' 编译配置")
-    info("  3. 运行 'heimaclaw start' 启动服务")
-
-
-def create_sample_markdown_configs(agent_dir: Path, name: str) -> None:
-    """创建示例 Markdown 配置文件"""
-
-    # SOUL.md
-    soul_content = f"""# SOUL.md - 核心身份认知
-
-_{name} 的核心定位和能力_
-
-## 🎯 核心定位
-
-**{name}** 是一个通用 AI 助手，致力于为用户提供高效、专业的服务。
-
-## 💪 核心能力
-
-### 对话交互
-- 理解用户意图，提供精准回答
-- 保持友好的对话氛围
-- 记住上下文，提供连贯服务
-
-### 任务执行
-- 执行用户指定的任务
-- 提供进度反馈
-- 处理异常情况
-
-## 🤝 协作关系
-
-- 独立工作：直接响应用户请求
-- 专业支持：遇到特定领域问题时，推荐专业 agent
-
-## ⚠️ 边界
-
-- 不执行危险操作
-- 重要决策前确认
-- 保护用户隐私
-
-## 🌟 氛围
-
-专业、友好、高效
-
-## 🔄 连续性
-
-我会记住用户的使用习惯和偏好，提供越来越贴心的服务。
-
----
-
-_这是 {name} 的核心配置，可根据需求调整_
-"""
-
-    # IDENTITY.md
-    identity_content = f"""# IDENTITY.md - 身份信息
-
-## 基本信息
-
-- **姓名**：{name}
-- **生物**：AI 助手
-- **氛围**：专业、友好
-- **表情符号**：🤖
-- **头像**：avatars/{name}.png
-
-## 自我介绍
-
-Hi! 我是 **{name}** 🤖
-
-我是一个 AI 助手，随时准备为你提供帮助。我可以：
-- 回答你的问题
-- 执行任务
-- 提供建议
-
----
-
-_这个文件定义了我的基本身份_
-"""
-
-    # 创建 memory 目录
-    memory_dir = agent_dir / "memory"
-    memory_dir.mkdir(exist_ok=True)
-
-    # 创建今天的记忆文件
-    from datetime import datetime
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    memory_file = memory_dir / f"{today}.md"
-    memory_content = f"""# {today} - Daily Memory
-
-## 📋 今日事件
-
-### Agent 创建
-- Agent {name} 创建完成
-- 使用模板初始化
-
-## 📝 备注
-
-这是 {name} 的第一条记忆记录。
-"""
-    memory_file.write_text(memory_content, encoding="utf-8")
-
-    # 保存文件
-    (agent_dir / "SOUL.md").write_text(soul_content, encoding="utf-8")
-    (agent_dir / "IDENTITY.md").write_text(identity_content, encoding="utf-8")
-
-    info("已创建示例配置文件:")
-    info("  - SOUL.md - 核心定位")
-    info("  - IDENTITY.md - 身份信息")
-    info("  - memory/ - 记忆目录")
-
-
-# ==================== 群组发现命令 ====================
-
-
-@bindings_app.command("discover")
-def discover_chats() -> None:
-    """
-    列出从会话历史中发现的 chat_id
-
-    用于帮助用户发现群组 ID。
-    """
-    from pathlib import Path
-
-    from rich.table import Table
-
-    info("群组发现功能")
-    print("")
-    info("获取群组 ID 的方法：")
-    info("  1. 在飞书群中给机器人发消息")
-    info("  2. 查看日志: tail -f logs/heimaclaw.log | grep chat_id")
-    info("  3. 日志中会显示: oc_xxxxxxx 格式的群组 ID")
-    print("")
-
-    # 尝试从会话目录中获取历史 chat_id
-    sessions_dir = Path("/tmp/heimaclaw/sessions")
-    if sessions_dir.exists():
-        chat_ids = set()
-        for session_file in sessions_dir.rglob("*.json"):
-            # 从文件名中提取 chat_id
-            parts = session_file.stem.split("_")
-            if len(parts) >= 2:
-                chat_ids.add(parts[1])
-
-        if chat_ids:
-            info("从会话历史中发现的 chat_id：")
-            table = Table()
-            table.add_column("Chat ID")
-            table.add_column("类型")
-
-            for chat_id in sorted(chat_ids):
-                chat_type = "群聊" if chat_id.startswith("oc_") else "私聊"
-                table.add_row(chat_id, chat_type)
-
-            console.print(table)
-        else:
-            info("暂无会话历史记录")
-
-
-# ==================== Agent 策略命令 ====================
-
 
 
 @agent_app.command("set-llm")

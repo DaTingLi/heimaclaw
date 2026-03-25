@@ -47,6 +47,12 @@ class AgentInfo:
     sandbox_enabled: bool
     sandbox_type: str  # "firecracker", "docker", "process"
     workspace: str
+    # OpenClaw 风格安全配置
+    sandbox_security_mode: bool = True
+    sandbox_network_mode: str = "bridge"
+    sandbox_container_user: str = "1000:1000"
+    sandbox_read_only_root: bool = True
+    sandbox_pids_limit: int = 256
 
 
 class FeishuWorker(mp.Process):
@@ -340,6 +346,29 @@ class MultiProcessFeishuService:
             if hasattr(feishu, "app_id") and feishu.app_id:
                 default_feishu = {"app_id": feishu.app_id, "app_secret": feishu.app_secret}
 
+        # 解密函数（在循环外定义，只导入一次）
+        _decrypt_cache: dict[str, str] = {}  # 缓存解密结果
+        
+        def _decrypt_if_needed(value: str) -> str:
+            """解密 ENC: 前缀的敏感信息（带缓存）"""
+            if not value:
+                return ""
+            if value.startswith("ENC:"):
+                # 使用缓存避免重复解密
+                if value in _decrypt_cache:
+                    return _decrypt_cache[value]
+                try:
+                    from heimaclaw.agent.manager import AgentManager, DecryptionError
+                    mgr = AgentManager()
+                    decrypted = mgr._decrypt(value[4:])
+                    _decrypt_cache[value] = decrypted
+                    return decrypted
+                except Exception as e:
+                    warning(f"解密失败，使用原始加密值: {e}")
+                    # 返回原始值（不含 ENC: 前缀），让后续验证捕获错误
+                    return value
+            return value
+
         for agent_dir in agents_dir.iterdir():
             if not agent_dir.is_dir():
                 continue
@@ -362,27 +391,42 @@ class MultiProcessFeishuService:
                 app_id = feishu_cfg.get("app_id") or default_feishu.get("app_id")
                 app_secret = feishu_cfg.get("app_secret") or default_feishu.get("app_secret")
 
+                # 解密
+                app_secret = _decrypt_if_needed(app_secret)
+
                 if not app_id or not app_secret:
                     warning(f"Agent {agent_name} 缺少飞书配置，跳过")
                     continue
 
                 # 构建 llm_config，包含 display_name
                 llm_cfg = data.get("llm", {})
+                api_key = llm_cfg.get("api_key", "")
+                if api_key:
+                    llm_cfg["api_key"] = _decrypt_if_needed(api_key)
                 llm_cfg["display_name"] = data.get("display_name", agent_name)
                 
+                sandbox_cfg = data.get("sandbox", {})
                 agent_info = AgentInfo(
                     name=agent_name,
                     display_name=data.get("display_name", agent_name),
                     app_id=app_id,
                     app_secret=app_secret,
                     llm_config=llm_cfg,
-                    sandbox_enabled=data.get("sandbox", {}).get("enabled", True),
-                    sandbox_type=data.get("sandbox", {}).get("type", "docker"),
+                    sandbox_enabled=sandbox_cfg.get("enabled", True),
+                    sandbox_type=sandbox_cfg.get("type", "docker"),
+                    # OpenClaw 风格安全配置
+                    sandbox_security_mode=sandbox_cfg.get("security_mode", True),
+                    sandbox_network_mode=sandbox_cfg.get("network_mode", "none"),
+                    sandbox_container_user=sandbox_cfg.get("user", "1000:1000"),
+                    sandbox_read_only_root=sandbox_cfg.get("read_only_root", True),
+                    sandbox_pids_limit=sandbox_cfg.get("pids_limit", 256),
                     workspace=str(agent_dir),
                 )
                 agents.append(agent_info)
                 info(f"加载 Agent: {agent_name} (App: {app_id[:10]}...)")
 
+            except json.JSONDecodeError as e:
+                error(f"Agent {agent_dir.name} 配置文件格式错误: {e}")
             except Exception as e:
                 error(f"加载 Agent {agent_dir.name} 失败: {e}")
 

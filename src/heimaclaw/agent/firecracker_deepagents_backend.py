@@ -3,7 +3,7 @@ Firecracker 沙箱 DeepAgents 后端
 
 继承 LocalShellBackend，但 execute() 路由到 Firecracker 沙箱。
 文件操作依然走 LocalShellBackend（映射了工作区）。
-沙箱失败时回退到本地执行，使用宿主机路径。
+沙箱失败时不允许回退本地，必须返回错误给上层。
 """
 
 import asyncio
@@ -29,7 +29,7 @@ class FirecrackerDeepAgentsBackend(LocalShellBackend):
     
     文件读写依然走 LocalShellBackend（映射了工作区），
     但危险的 Shell 执行 (execute) 强制路由到 Firecracker 沙箱。
-    沙箱失败时回退到本地执行。
+    沙箱失败时不允许回退本地。
     """
 
     def __init__(
@@ -54,46 +54,15 @@ class FirecrackerDeepAgentsBackend(LocalShellBackend):
             timeout_ms=timeout_ms,
         )
 
-    def _local_execute(self, command: str, timeout: int) -> ExecuteResponse:
-        """本地执行（fallback）"""
-        info(f"[FC-Backend] 回退到本地执行: {command[:50]}...")
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=HOST_WORKSPACE,  # 使用宿主机工作目录
-            )
-            return ExecuteResponse(
-                output=result.stdout + ("\n" + result.stderr if result.stderr else ""),
-                exit_code=result.returncode or 0,
-                truncated=False,
-            )
-        except subprocess.TimeoutExpired:
-            return ExecuteResponse(
-                output="",
-                stderr="命令执行超时",
-                exit_code=-1,
-                truncated=False,
-            )
-        except Exception as e:
-            return ExecuteResponse(
-                output="",
-                stderr=f"本地执行失败: {e}",
-                exit_code=1,
-                truncated=False,
-            )
-
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
-        """同步执行 - 优先沙箱，失败则本地"""
+        """同步执行 - 强制沙箱，不允许本地回退"""
         info(f"[FC-Backend.execute] 实例={self.instance_id}, cmd={command[:50]}...")
 
         timeout_ms = (timeout or 120) * 1000
 
         try:
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 result = loop.run_until_complete(self._do_sandbox_execute(command, timeout_ms))
             finally:
@@ -106,11 +75,16 @@ class FirecrackerDeepAgentsBackend(LocalShellBackend):
                 truncated=False,
             )
         except Exception as e:
-            error(f"[FC-Backend.execute] 沙箱执行失败，回退本地: {e}")
-            return self._local_execute(command, timeout or 120)
+            error(f"[FC-Backend.execute] 沙箱执行失败: {e}")
+            return ExecuteResponse(
+                output="",
+                stderr=f"[FC-Backend] 沙箱执行失败: {e}",
+                exit_code=1,
+                truncated=False,
+            )
 
     async def aexecute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
-        """异步执行 - 优先沙箱，失败则本地"""
+        """异步执行 - 强制沙箱，不允许本地回退"""
         info(f"[FC-Backend.aexecute] 实例={self.instance_id}, cmd={command[:50]}...")
 
         timeout_ms = (timeout or 120) * 1000
@@ -124,8 +98,13 @@ class FirecrackerDeepAgentsBackend(LocalShellBackend):
                 truncated=False,
             )
         except Exception as e:
-            error(f"[FC-Backend.aexecute] 沙箱执行失败，回退本地: {e}")
-            return self._local_execute(command, timeout or 120)
+            error(f"[FC-Backend.aexecute] 沙箱执行失败: {e}")
+            return ExecuteResponse(
+                output="",
+                stderr=f"[FC-Backend] 沙箱执行失败: {e}",
+                exit_code=1,
+                truncated=False,
+            )
 
 
 __all__ = ["FirecrackerDeepAgentsBackend"]

@@ -15,8 +15,8 @@ timeout = 60
 max_retries = 3
 
 [channels.feishu]
-app_id = "cli_a9301fec40395bde"
-app_secret = "EWPY3k4fjiMpL5iJx6PFFhEzhLsMMkXd"
+app_id = "cli_a9490997df385ccd"
+app_secret = "PLN6DlbrmTd24RHo3W7njdq3BT0PMVhE"
 
 [sandbox]
 type = "docker"

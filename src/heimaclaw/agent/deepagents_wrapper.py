@@ -55,9 +55,15 @@ class DeepAgentsWrapper:
 
             if registry.sandbox_backend and registry.sandbox_instance_id:
                 backend_type = getattr(registry.sandbox_backend, 'backend_type', 'firecracker')
+                
+                # 修复工作区路径：必须指向具体的 agent_name 目录，否则文件会写到挂载卷外部
+                import os
+                project_dir = f"/root/heimaclaw_workspace/{self.agent_name}"
+                os.makedirs(project_dir, exist_ok=True)
+                
                 if backend_type == 'docker':
                     backend = DockerDeepAgentsBackend(
-                        root_dir="/root/heimaclaw_workspace",
+                        root_dir=project_dir,
                         docker_backend=registry.sandbox_backend,
                         instance_id=registry.sandbox_instance_id,
                         env=os.environ.copy(),
@@ -66,7 +72,7 @@ class DeepAgentsWrapper:
                     console.print("\n[blue bold][Sandbox: Docker] 正在使用 Docker 容器隔离执行[/blue bold]\n")
                 else:
                     backend = FirecrackerDeepAgentsBackend(
-                        root_dir="/root/heimaclaw_workspace",
+                        root_dir=project_dir,
                         sandbox_backend=registry.sandbox_backend,
                         instance_id=registry.sandbox_instance_id,
                         env=os.environ.copy(),
@@ -76,8 +82,13 @@ class DeepAgentsWrapper:
                     console.print("\n[blue bold][Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行[/blue bold]\n")
             else:
                 from deepagents.backends import LocalShellBackend
+                
+                project_dir = f"./heimaclaw_workspace/{self.agent_name}"
+                import os
+                os.makedirs(project_dir, exist_ok=True)
+                
                 backend = LocalShellBackend(
-                    root_dir="./heimaclaw_workspace",
+                    root_dir=project_dir,
                     env=os.environ.copy(),
                     virtual_mode=True,
                 )

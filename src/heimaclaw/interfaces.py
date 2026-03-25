@@ -63,6 +63,13 @@ class AgentConfig(BaseModel):
     )
     sandbox_memory_mb: int = Field(default=128, description="沙箱内存")
     sandbox_cpu_count: int = Field(default=1, description="沙箱 CPU 核心数")
+    # OpenClaw 风格安全配置
+    sandbox_security_mode: bool = Field(default=True, description="启用 OpenClaw 安全模式")
+    sandbox_network_mode: str = Field(default="host", description="网络模式: none/bridge/host")
+    sandbox_container_user: str = Field(default="1000:1000", description="容器用户")
+    sandbox_read_only_root: bool = Field(default=True, description="只读根文件系统")
+    sandbox_pids_limit: int = Field(default=256, description="PID 限制")
+    sandbox_exposed_ports: str = Field(default="", description="暴露到宿主机的端口，逗号分隔，如: 5010,5012")
     context_mode: str = Field(
         default="minimal",
         description="上下文模式: full=完整历史, compact=摘要, minimal=仅当前",
