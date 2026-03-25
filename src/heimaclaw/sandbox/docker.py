@@ -200,8 +200,12 @@ class DockerSandboxBackend:
         info(f"[DockerSandboxBackend] 最大容器数: {max_containers}")
     
     async def initialize(self) -> None:
-        """初始化沙箱（创建默认实例）"""
-        pass
+        """初始化沙箱（工业级大扫除：清理上一次异常遗留的僵尸沙箱）"""
+        import subprocess
+        info("[DockerSandboxBackend] 执行沙箱协调清理 (Reconciliation)...")
+        # 清理所有被打上 managed-by=heimaclaw 标签的历史遗留容器
+        subprocess.run('docker rm -f $(docker ps -a -q -f "label=managed-by=heimaclaw") 2>/dev/null', shell=True)
+        info("[DockerSandboxBackend] 僵尸容器清理完成，环境已就绪。")
 
     def _generate_instance_id(self, prefix: str = "docker") -> str:
         """生成唯一的实例 ID"""
@@ -242,6 +246,7 @@ class DockerSandboxBackend:
                 "docker", "run", "-d",
                 "--name", container_name,
                 "--hostname", project_name,
+                "--label", "managed-by=heimaclaw",  # 注入工业级生命周期管理标签
                 "-v", f"{project_dir}:/root/workspace:rw",
                 "-w", "/root/workspace",
             ]
