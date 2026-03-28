@@ -6,7 +6,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -25,12 +24,15 @@ venv/
 ENV/
 env/
 .venv/
+venv312/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-workspace
+*.sublime-project
 
 # Testing
 .pytest_cache/
@@ -40,40 +42,45 @@ htmlcov/
 
 # Type checking
 .mypy_cache/
+.ruff_cache/
 
 # Secrets
 .env
+.env.*
 *.pem
 *.key
+.secrets/
+credentials.json
 
 # Logs
 *.log
 logs/
+heimaclaw.log
 
-# Data
+# Data & Runtime (should be in user home directory)
 data/
 sandboxes/
+run/
+memory/
+sessions/
 
 # Build
 *.whl
-venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-.coverage
-htmlcov/
-*.egg-info/
 dist/
 build/
-data/
-logs/
-sandboxes/
+
+# Reference & Backups (do not commit)
+reference/
 standards_backup/
--e 
-# Local config files (contain secrets)
-config/config.toml
-config/*.toml
--e 
-# User agents config (local only - contains secrets)
-# agents/  (use templates/agents for distribution)
+
+# User workspace (user-specific, do not commit)
+heimaclaw_workspace/
+
+# Local config files (contain secrets - use templates for distribution)
+# ~/.heimaclaw/config.toml
+
+# Development
+*.tmp
+*.bak
+*.swp
+.DS_Store
