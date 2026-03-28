@@ -321,7 +321,13 @@ def start_command(
     import sys
     import threading
     from pathlib import Path
-    
+
+    # 初始化日志配置（解决日志未写入文件的问题）
+    log_dir = paths.get_log_dir()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    from heimaclaw.console import configure_logging
+    configure_logging(str(log_dir / "heimaclaw.log"), enabled=True)
+
     # PID 文件路径
     run_dir = paths.get_run_dir()
     if not run_dir.exists():
