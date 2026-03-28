@@ -124,3 +124,96 @@ console = Console(theme=Theme({
 
 
 
+
+---
+
+## 5. 统一日志模块（heimaclaw.console）
+
+项目统一使用 `heimaclaw.console` 模块进行日志输出，禁止使用 `print()`。
+
+### 5.1 已定义的日志函数
+
+```python
+from heimaclaw.console import info, error, warning, agent_event
+
+# 通用日志
+info("信息消息")           # 终端+文件
+error("错误消息")          # 终端+文件  
+warning("警告消息")         # 终端+文件
+
+# Agent专用
+agent_event("Agent事件")   # 终端+文件，带Agent颜色标记
+```
+
+### 5.2 为什么禁止 print()
+
+| print() | heimaclaw.console |
+|---------|-------------------|
+| 仅输出到终端 | 同时输出到**终端 + 日志文件** |
+| 无法统一控制 | 可通过 `configure_logging()` 统一配置 |
+| 无日志级别 | 支持 INFO/ERROR/WARNING |
+
+### 5.3 必须使用日志函数的场景
+
+- Agent 执行链路（DeepAgentsWrapper、Runner）
+- ReAct 推理步骤
+- 工具注册和执行
+- Docker/Firecracker 沙箱操作
+- 飞书消息收发
+- 错误和异常
+
+### 5.4 允许使用 print() 的场景
+
+- 仅用于调试临时脚本
+- traceback.print_exc() 用于异常追踪（保留完整堆栈）
+- 示例代码（demo/example）
+
+### 5.5 迁移指南
+
+```python
+# ❌ 错误
+print(f"[DeepAgents] 执行失败: {e}", flush=True, file=sys.stderr)
+
+# ✅ 正确
+error(f"[DeepAgents] 执行失败: {e}")
+info(f"[DEBUG] DeepAgents 执行完成")
+```
+
+---
+
+## 6. 日志文件配置
+
+### 6.1 配置方式
+
+```python
+from heimaclaw.console import configure_logging
+
+# 在服务启动时初始化（cli.py start_command）
+log_dir = paths.get_log_dir()
+log_dir.mkdir(parents=True, exist_ok=True)
+configure_logging(str(log_dir / "heimaclaw.log"), enabled=True)
+```
+
+### 6.2 日志文件位置
+
+- 默认：`~/.heimaclaw/logs/agent.log`
+- 可配置：任何指定路径
+
+### 6.3 日志轮转
+
+推荐使用外部工具（logrotate）进行日志轮转：
+```bash
+# /etc/logrotate.d/heimaclaw
+~/.heimaclaw/logs/agent.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+}
+```
+
+---
+
+版本：v1.1（新增统一日志模块规范）

@@ -206,3 +206,34 @@ cat /tmp/heimaclaw_test_code.txt → 20260322120612345678 ✅
 **提交**:
 - `4dba4f1` fix: 恢复原始 vsock server 代码
 - `7fe8c35` docs: 添加 VSOCK 排查文档
+
+---
+
+## 2026-03-29 日志统一修复
+
+### ✅ 日志架构统一 - 已完成
+
+**问题**：项目中多处使用 `print()` 而非统一的日志函数，导致日志只输出到终端而不写入文件。
+
+**修复范围**（10个文件）：
+
+| 文件 | 修复内容 |
+|------|---------|
+| `agent/runner.py` | DeepAgents日志 + 工具注册 |
+| `agent/deepagents_wrapper.py` | 执行链路全部日志 |
+| `agent/react.py` | ReAct推理日志 |
+| `agent/planner.py` | 规划器日志 |
+| `agent/router.py` | 路由绑定错误 |
+| `agent/todos/tool_handler.py` | 服务注册失败 |
+| `agent/todos/memory_tools.py` | 记忆工具调试 |
+| `agent/tools/exec_tool.py` | 执行工具日志 |
+| `agent/tools/expose_tool.py` | 暴露工具日志 |
+| `core/event_bus.py` | 事件总线日志 |
+
+**日志链路现已完整**：
+```
+执行 Agent → info()/error() → 同时输出到终端 + 写入日志文件
+```
+
+**规范文档**：`standards/CODE-STYLE-v1.0.md`（第5节：统一日志模块）
+
