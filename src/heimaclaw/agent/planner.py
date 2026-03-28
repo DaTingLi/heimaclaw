@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from heimaclaw.agent.tools import ToolRegistry
+from heimaclaw.console import info, error
 
 
 class ExecutionMode(str, Enum):
@@ -174,7 +175,7 @@ class Planner:
                 )
         
         except Exception as e:
-            print(f"[Planner] LLM 规划失败: {e}")
+            error(f"[Planner] LLM 规划失败: {e}")
         
         return await self._plan_with_rules(user_message, available_tools)
 
