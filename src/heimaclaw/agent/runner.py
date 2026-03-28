@@ -162,6 +162,30 @@ def _register_all_tools():
     )
     print(f"注册工具: {DOCKER_TOOL_DEFINITION['name']} (async=False)")
 
+    # snapshot 快照工具
+    from heimaclaw.agent.tools.snapshot_tool import SNAPSHOT_TOOL_DEFINITION, snapshot_handler
+    registry.register(
+        name=SNAPSHOT_TOOL_DEFINITION["name"],
+        description=SNAPSHOT_TOOL_DEFINITION["description"],
+        handler=snapshot_handler,
+        parameters=SNAPSHOT_TOOL_DEFINITION["parameters"],
+        timeout_ms=60000,
+    )
+    snapshot_name = SNAPSHOT_TOOL_DEFINITION['name']
+    print(f'注册工具: {snapshot_name} (async=False)')
+
+    # monitor 监控工具
+    from heimaclaw.agent.tools.monitor_tool import MONITOR_TOOL_DEFINITION, monitor_handler
+    registry.register(
+        name=MONITOR_TOOL_DEFINITION["name"],
+        description=MONITOR_TOOL_DEFINITION["description"],
+        handler=monitor_handler,
+        parameters=MONITOR_TOOL_DEFINITION["parameters"],
+        timeout_ms=30000,
+    )
+    monitor_name = MONITOR_TOOL_DEFINITION['name']
+    print(f'注册工具: {monitor_name} (async=False)')
+
 
 class AgentRunner:
     """

@@ -877,3 +877,196 @@ _文档版本: v2.0 | 创建: 2026-03-24 | 参考: OpenClaw Delegate Architectur
 ---
 
 _文档版本: v2.0 | 更新: 2026-03-24 | 测试: 通过_
+
+---
+
+## 📋 实现进度 (2026-03-26)
+
+### ✅ 已完成
+
+| 模块 | 文件 | 行数 | 状态 |
+|------|------|------|------|
+| 基础镜像 | `docker/Dockerfile.base` | 54 | ✅ 已创建 |
+| 端口池 | `core/dockerimpl/port_pool.py` | 244 | ✅ 已测试 |
+| 依赖分析 | `core/dockerimpl/dependency_analyzer.py` | 323 | ✅ 已测试 |
+| 容器池 | `core/dockerimpl/container_pool.py` | 550 | ✅ 已测试 |
+| 项目管理 | `core/dockerimpl/project_manager.py` | 498 | ✅ 已测试 |
+| 快照管理 | `core/dockerimpl/snapshot_manager.py` | 317 | ✅ 已测试 |
+| 优雅删除 | `core/dockerimpl/graceful_deletion.py` | 302 | ✅ 已测试 |
+| BaseBackend | `agent/base_backend.py` | 72 | ✅ 新建 |
+| DockerBackend | `agent/docker_backend.py` | - | ✅ 修复导入 |
+| CLI docker | `cli.py` | +150 | ✅ 5个子命令 |
+
+**代码量统计**: ~2360 行核心代码
+
+### CLI 命令
+
+```bash
+heimaclaw docker list     # 列出所有容器
+heimaclaw docker stats    # 容器统计
+heimaclaw docker cleanup  # 清理空闲容器
+heimaclaw docker logs     # 查看日志
+heimaclaw docker inspect  # 详细信息
+```
+
+### 🔄 进行中
+
+1. **单元测试** - `tests/test_docker_*.py`
+2. **集成测试** - 创建真实容器验证
+
+### 📋 待完成
+
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| P1 | 容器创建集成测试 | 验证真实容器创建流程 |
+| P1 | 日志功能完善 | 实现容器日志查看 |
+| P2 | 快照恢复 | 从快照恢复项目 |
+| P2 | 监控告警 | 容器资源监控 |
+| P3 | API 服务化 | 提供 HTTP API |
+
+---
+
+## 🧪 单元测试 (2026-03-26)
+
+### 测试文件
+
+| 文件 | 测试数 | 状态 |
+|------|--------|------|
+| `tests/core/test_port_pool.py` | 12 | ✅ 通过 |
+| `tests/core/test_container_pool.py` | 8 | ✅ 通过 |
+| `tests/agent/test_docker_backend.py` | 14 | ✅ 通过 |
+| **总计** | **34** | **✅ 100%** |
+
+### 运行测试
+
+```bash
+cd /root/dt/ai_coding/heimaclaw
+PYTHONPATH=/root/dt/ai_coding/heimaclaw/src python3 -m pytest tests/core/test_port_pool.py tests/core/test_container_pool.py tests/agent/test_docker_backend.py -v
+```
+
+### 覆盖范围
+
+- **PortPool**: 初始化、分配、释放、统计、边界情况
+- **ContainerPool**: 初始化、配置、状态枚举
+- **DockerBackend**: 基础操作、项目名提取、服务启停、Mock 执行
+
+### 测试技术
+
+- 使用 `importlib.util` 动态加载模块，避免 `deepagents` 依赖问题
+- 使用 `unittest.mock` Mock 对象进行隔离测试
+- 使用 `@pytest.mark.asyncio` 测试异步方法
+
+---
+
+## ✅ 集成测试完成 (2026-03-26)
+
+### 测试结果
+
+```
+104 passed, 1 skipped, 3 warnings in 2.24s
+```
+
+### 集成测试覆盖
+
+| 测试类 | 测试内容 | 状态 |
+|--------|----------|------|
+| `TestDockerIntegration` | 创建容器、Python执行、多命令 | ✅ 3个 |
+| `TestPortPoolIntegration` | 端口分配、优先端口、冲突检测 | ✅ 3个 |
+| `TestDependencyAnalyzer` | requirements.txt分析 | ✅ 2个 |
+
+### 真实容器测试验证
+
+```python
+# 测试1: 创建容器并执行命令
+container = await container_pool.get_container("test_simple")
+await container.ensure()
+result = await container.execute("echo 'Hello from container'", timeout=60)
+# ✅ exit_code=0, "Hello from container" in output
+
+# 测试2: Python执行
+result = await container.execute("python3 -c 'print(1 + 2)'", timeout=60)
+# ✅ exit_code=0, "3" in output
+
+# 测试3: 多次命令顺序执行（验证容器持久化）
+result1 = await container.execute("echo 'first'", timeout=30)
+result2 = await container.execute("echo 'second'", timeout=30)
+# ✅ 两个命令都成功，容器状态保持
+```
+
+### 资源清理
+
+集成测试包含自动清理机制：
+- `container_pool` fixture 在测试后清理所有创建的容器
+- 使用 `docker rm -f` 确保容器被销毁
+
+---
+
+## 🔧 Agent 工具封装 (2026-03-26)
+
+### 用户说话就能用的工具
+
+现在用户可以通过自然语言调用 Docker 沙箱功能了！
+
+#### 1. docker_snapshot - 快照工具
+
+```python
+SNAPSHOT_TOOL_DEFINITION = {
+    "name": "docker_snapshot",
+    "description": "Docker 项目快照工具 - 保存和恢复项目代码快照"
+}
+```
+
+**支持的操作：**
+- `save` - 保存快照
+- `list` - 列出快照
+- `restore` - 恢复快照
+- `delete` - 删除快照
+
+**用户说话示例：**
+```
+用户: "帮我保存一下快照"
+用户: "看看有哪些快照"
+用户: "恢复到之前的版本"
+用户: "删除那个快照"
+```
+
+#### 2. docker_monitor - 监控工具
+
+```python
+MONITOR_TOOL_DEFINITION = {
+    "name": "docker_monitor",
+    "description": "Docker 容器监控工具 - 查看容器资源使用情况和告警"
+}
+```
+
+**支持的操作：**
+- `status` - 容器状态
+- `stats` - 资源统计（CPU、内存）
+- `inspect` - 单个容器详情
+- `alert` - 资源告警检查
+
+**用户说话示例：**
+```
+用户: "现在容器状态怎么样？"
+用户: "帮我看看内存使用"
+用户: "哪个容器用的资源最多？"
+```
+
+### 工具注册
+
+工具已注册到 `AgentRunner._register_all_tools()`:
+- `docker_project` - 项目管理（已有）
+- `docker_snapshot` - 快照管理（新增）
+- `docker_monitor` - 监控告警（新增）
+
+### 使用流程
+
+```
+用户（飞书消息）
+    ↓
+Agent 理解意图
+    ↓
+调用工具: docker_snapshot / docker_monitor / docker_project
+    ↓
+返回结果给用户
+```

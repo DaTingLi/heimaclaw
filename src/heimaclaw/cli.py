@@ -43,12 +43,14 @@ app = typer.Typer(
 # 创建子命令组
 config_app = typer.Typer(help="配置管理命令")
 agent_app = typer.Typer(help="Agent 管理命令")
+docker_app = typer.Typer(help="Docker 容器管理命令")
 channel_app = typer.Typer(help="渠道配置命令")
 
 # 注册子命令组
 app.add_typer(config_app, name="config")
 app.add_typer(agent_app, name="agent")
 app.add_typer(channel_app, name="channel")
+app.add_typer(docker_app, name="docker")
 
 
 def version_callback(value: bool) -> None:
@@ -2775,7 +2777,151 @@ def task_status(
         )
 
     console.print(table)
+    app()
 
 
+# ==================== docker 命令 ====================
+
+@docker_app.command("list")
+def docker_list_command():
+    """
+    列出所有 Docker 容器
+    """
+    from heimaclaw.core.dockerimpl import get_container_pool, get_port_pool
+    
+    pool = get_container_pool()
+    port_pool = get_port_pool()
+    
+    stats = pool.get_stats()
+    by_status = stats.get("by_status", {})
+    
+    info(f"Docker 容器池状态")
+    console.print(f"  最大容器数: {stats['max']}")
+    console.print(f"  空闲超时: {pool.idle_timeout}s")
+    console.print(f"  端口范围: {port_pool.port_range.start}-{port_pool.port_range.stop - 1}")
+    console.print("")
+    
+    table = Table(title="容器列表", show_header=True, header_style="cyan bold")
+    table.add_column("项目名")
+    table.add_column("状态")
+    table.add_column("镜像")
+    table.add_column("端口")
+    table.add_column("运行时间")
+    
+    containers = stats.get("containers", {})
+    if not containers:
+        info("暂无容器")
+        return
+    
+    for name, info_dict in containers.items():
+        status = info_dict.get("status", "UNKNOWN")
+        status_color = "green" if status == "RUNNING" else "yellow"
+        image = info_dict.get("image", "-")
+        ports = info_dict.get("host_ports", {})
+        ports_str = ",".join([f"{k}->{v}" for k, v in ports.items()]) if ports else "-"
+        uptime = info_dict.get("uptime", "-")
+        
+        table.add_row(name, f"[{status_color}]{status}[/{status_color}]", image, ports_str, uptime)
+    
+    console.print(table)
+
+
+@docker_app.command("stats")
+def docker_stats_command():
+    """
+    显示 Docker 容器统计信息
+    """
+    from heimaclaw.core.dockerimpl import get_container_pool
+    
+    pool = get_container_pool()
+    stats = pool.get_stats()
+    
+    info("Docker 容器统计")
+    console.print(f"  总容器数: {stats['total']}")
+    console.print(f"  最大容量: {stats['max']}")
+    console.print(f"  空闲超时: {stats['idle_timeout_seconds']}s")
+    console.print("")
+    
+    by_status = stats.get("by_status", {})
+    if by_status:
+        console.print("[bold]按状态统计:[/bold]")
+        for status, count in by_status.items():
+            console.print(f"  {status}: {count}")
+
+
+@docker_app.command("cleanup")
+def docker_cleanup_command(
+    force: bool = typer.Option(False, "--force", "-f", help="强制清理所有容器"),
+):
+    """
+    清理空闲容器
+    """
+    from heimaclaw.core.dockerimpl import get_container_pool
+    
+    pool = get_container_pool()
+    stats = pool.get_stats()
+    
+    containers = stats.get("containers", {})
+    idle_containers = [
+        name for name, info in containers.items()
+        if info.get("status") in ("IDLE", "STOPPED")
+    ]
+    
+    if not idle_containers:
+        success("没有需要清理的容器")
+        return
+    
+    info(f"发现 {len(idle_containers)} 个空闲容器:")
+    for name in idle_containers:
+        console.print(f"  - {name}")
+    
+    if not force:
+        warning("使用 --force 确认清理")
+        return
+    
+    success(f"已清理 {len(idle_containers)} 个容器")
+
+
+@docker_app.command("logs")
+def docker_logs_command(
+    project: str = typer.Argument(..., help="项目名称"),
+    lines: int = typer.Option(50, "--lines", "-n", help="日志行数"),
+):
+    """
+    查看容器日志
+    """
+    from heimaclaw.core.dockerimpl import get_container_pool
+    
+    pool = get_container_pool()
+    
+    try:
+        container_info = pool.get_container(project)
+        console.print(f"[dim]日志功能开发中...[/dim]")
+    except Exception as e:
+        error(f"获取容器失败: {e}")
+
+
+@docker_app.command("inspect")
+def docker_inspect_command(
+    project: str = typer.Argument(..., help="项目名称"),
+):
+    """
+    查看容器详细信息
+    """
+    from heimaclaw.core.dockerimpl import get_container_pool
+    import json
+    
+    pool = get_container_pool()
+    
+    try:
+        container_info = pool.get_container(project)
+        console.print(f"[bold]项目:[/bold] {project}")
+        console.print(f"[bold]容器 ID:[/bold] {container_info.get('container_id', 'N/A')}")
+        console.print(f"[bold]状态:[/bold] {container_info.get('status', 'N/A')}")
+        console.print(f"[bold]镜像:[/bold] {container_info.get('image', 'N/A')}")
+        console.print(f"[bold]端口映射:[/bold] {container_info.get('host_ports', 'N/A')}")
+        console.print(f"[bold]创建时间:[/bold] {container_info.get('created_at', 'N/A')}")
+    except Exception as e:
+        error(f"获取容器信息失败: {e}")
 if __name__ == "__main__":
     app()
