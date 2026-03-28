@@ -17,6 +17,7 @@ from enum import Enum
 from heimaclaw.agent.tools import ToolRegistry
 from heimaclaw.agent.planner import Planner, ExecutionPlan, ExecutionStep, ExecutionMode
 from heimaclaw.interfaces import ToolResult
+from heimaclaw.console import info, error
 
 
 class StepType(str, Enum):
@@ -74,7 +75,7 @@ class ReActEngine:
         """执行推理"""
         result = ExecutionResult()
 
-        print(f"[Planner] 分析任务: {user_message[:50]}...")
+        info(f"[Planner] 分析任务: {user_message[:50]}...")
         
         # 获取可用工具
         tools = self.tool_registry.get_openai_tools()
@@ -82,11 +83,11 @@ class ReActEngine:
         # LLM 规划任务分解
         plan: ExecutionPlan = await self._planner.plan(user_message, tools)
         
-        print(f"[Planner] 生成计划: {len(plan.steps)} 个步骤")
-        print(f"[Planner] reasoning: {plan.reasoning[:80] if plan.reasoning else 'N/A'}...")
+        info(f"[Planner] 生成计划: {len(plan.steps)} 个步骤")
+        info(f"[Planner] reasoning: {plan.reasoning[:80] if plan.reasoning else 'N/A'}...")
         
         for step in plan.steps:
-            print(f"[Planner]   {step.step_id}: {step.description} (mode={step.execution_mode.value})")
+            info(f"[Planner]   {step.step_id}: {step.description} (mode={step.execution_mode.value})")
 
         # 执行步骤
         step_results = {}
@@ -94,7 +95,7 @@ class ReActEngine:
         # 按依赖关系分组执行
         execution_groups = self._build_execution_groups(plan.steps)
         
-        print(f"[ReAct] 执行层级: {len(execution_groups)} groups")
+        info(f"[ReAct] 执行层级: {len(execution_groups)} groups")
         
         for group in execution_groups:
             # 判断是否并行
@@ -105,13 +106,13 @@ class ReActEngine:
             
             if can_parallel and len(group) > 1:
                 # 并行执行
-                print(f"[ReAct] 并行执行 {len(group)} 个步骤")
+                info(f"[ReAct] 并行执行 {len(group)} 个步骤")
                 results = await self._execute_parallel(group)
                 step_results.update(results)
             else:
                 # 串行执行
                 for step in group:
-                    print(f"[ReAct] 串行执行: {step.step_id}")
+                    info(f"[ReAct] 串行执行: {step.step_id}")
                     res = await self._execute_step(step)
                     step_results[step.step_id] = res
                     result.steps.append(Step(
@@ -211,14 +212,14 @@ class ReActEngine:
         )
         
         # 启动子 Agent，立即返回 job_id
-        print(f"[ReAct] 启动子 Agent: {spawn_config.task[:50]}...")
+        info(f"[ReAct] 启动子 Agent: {spawn_config.task[:50]}...")
         spawn_result = await self.subagent_spawner.launch(spawn_config)
         
         if spawn_result.status != "accepted":
             return f"错误: 子 Agent 启动失败 - {spawn_result.error}"
         
         job_id = spawn_result.job_id
-        print(f"[ReAct] 子 Agent 已启动，job_id={job_id}，等待完成...")
+        info(f"[ReAct] 子 Agent 已启动，job_id={job_id}，等待完成...")
         
         # 等待完成（带超时）
         timeout = step.estimated_duration_seconds + 60
@@ -228,17 +229,17 @@ class ReActEngine:
             job = await self.subagent_spawner.check(job_id)
             
             if not job:
-                print(f"[ReAct] 任务丢失: job_id={job_id}")
+                error(f"[ReAct] 任务丢失: job_id={job_id}")
                 return f"错误: 任务丢失 (job_id={job_id})"
             
-            print(f"[ReAct] 子 Agent {job_id} 状态: {job.status.value}, result={job.result}, error={job.error}")
+            info(f"[ReAct] 子 Agent {job_id} 状态: {job.status.value}, result={job.result}, error={job.error}")
             
             if job.status.value == "success":
-                print(f"[ReAct] 子 Agent {job_id} 完成, 返回: {job.result[:100] if job.result else 'None'}...")
+                info(f"[ReAct] 子 Agent {job_id} 完成, 返回: {job.result[:100] if job.result else 'None'}...")
                 return job.result or "(无输出)"
             
             if job.status.value == "failed":
-                print(f"[ReAct] 子 Agent {job_id} 失败: {job.error}")
+                error(f"[ReAct] 子 Agent {job_id} 失败: {job.error}")
                 return f"错误: {job.error}"
             
             if job.status.value == "cancelled":
