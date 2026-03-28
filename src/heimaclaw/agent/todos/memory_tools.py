@@ -134,8 +134,8 @@ async def remember_preference_handler(
     # 更新到用户画像章节
     memory_path = Path.home() / ".heimaclaw" / "agents" / agent_id / "AGENTS.md"
     
-    print(f"[DEBUG] remember_preference: path={memory_path}, exists={memory_path.exists()}")
-    print(f"[DEBUG] preference: {preference}")
+    info(f"[DEBUG] remember_preference: path={memory_path}, exists={memory_path.exists()}")
+    info(f"[DEBUG] preference: {preference}")
     
     # 确保目录存在
     memory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,14 +165,14 @@ async def remember_preference_handler(
             new_content = content + f"\n\n{section_marker}\n{entry}\n"
         
         memory_path.write_text(new_content, encoding="utf-8")
-        print(f"[DEBUG] Successfully wrote to {memory_path}")
+        info(f"[DEBUG] Successfully wrote to {memory_path}")
         
         return f"🧠 已记住你的偏好：{preference}"
         
     except Exception as e:
         import traceback
-        print(f"[DEBUG] remember_preference error: {e}")
-        print(f"[DEBUG] {traceback.format_exc()}")
+        error(f"[DEBUG] remember_preference error: {e}")
+        error(f"[DEBUG] {traceback.format_exc()}")
         return f"错误: 记忆偏好失败 - {str(e)}"
         
     except Exception as e:

@@ -14,6 +14,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from typing import Optional
+from heimaclaw.console import info, error, warning
 
 
 @dataclass
@@ -158,7 +159,7 @@ async def expose(
     local_url = f"http://{host}:{port}"
     
     # ===== 第一步: 容器内健康检查 =====
-    print(f"[expose] 开始容器内健康检查 {host}:{port}...")
+    info(f"[expose] 开始容器内健康检查 {host}:{port}...")
     health_ok, health_details = await health_check_robust(
         port=port,
         host=host,
@@ -175,10 +176,10 @@ async def expose(
             host_accessible=False,
         )
     
-    print(f"[expose] ✅ 容器内健康检查通过")
+    info(f"[expose] ✅ 容器内健康检查通过")
     
     # ===== 第二步: 宿主机可访问性检查（关键修复！） =====
-    print(f"[expose] 开始宿主机可访问性检查端口 {port}...")
+    info(f"[expose] 开始宿主机可访问性检查端口 {port}...")
     host_ok, host_details = await check_host_accessibility(port)
     
     if not host_ok:
@@ -190,7 +191,7 @@ async def expose(
             host_accessible=False,
         )
     
-    print(f"[expose] ✅ 宿主机可访问性检查通过")
+    info(f"[expose] ✅ 宿主机可访问性检查通过")
     
     # ===== 第三步: 公网暴露 =====
     if type in ("auto", "direct_ip"):
@@ -298,9 +299,9 @@ if __name__ == "__main__":
     result = asyncio.run(expose(args.host, args.port))
     
     if result.success:
-        print(f"✅ 暴露成功！")
-        print(f"   本地地址: {result.local_url}")
-        print(f"   容器健康检查: {'✅' if result.health_check_passed else '❌'}")
-        print(f"   宿主机可访问: {'✅' if result.host_accessible else '❌'}")
+        info(f"✅ 暴露成功！")
+        info(f"   本地地址: {result.local_url}")
+        info(f"   容器健康检查: {'✅' if result.health_check_passed else '❌'}")
+        info(f"   宿主机可访问: {'✅' if result.host_accessible else '❌'}")
     else:
-        print(f"❌ 暴露失败: {result.error}")
+        error(f"❌ 暴露失败: {result.error}")

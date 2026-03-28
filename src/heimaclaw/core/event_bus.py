@@ -197,7 +197,7 @@ class EventBus:
                     callback(event)
             except Exception as e:
                 # 订阅者失败不应该影响事件发射
-                print(f"EventBus subscriber error: {e}")
+                error(f"EventBus subscriber error: {e}")
 
     def subscribe(self, agent_id: str, callback: Callable[[Event], None]):
         """
@@ -324,14 +324,14 @@ class EventBus:
         self._async_listeners = getattr(self, '_async_listeners', {})
         if listener_id not in self._async_listeners:
             self._async_listeners[listener_id] = callback
-            print(f"[EventBus] 添加监听器: {listener_id}")
+            info(f"[EventBus] 添加监听器: {listener_id}")
     
     def remove_listener(self, listener_id: str):
         """移除监听器"""
         self._async_listeners = getattr(self, '_async_listeners', {})
         if listener_id in self._async_listeners:
             del self._async_listeners[listener_id]
-            print(f"[EventBus] 移除监听器: {listener_id}")
+            info(f"[EventBus] 移除监听器: {listener_id}")
     
     def get_async_listener_ids(self) -> list:
         """获取所有监听器 ID"""
@@ -346,8 +346,8 @@ class EventBus:
         2. 通知所有订阅者（包括异步监听器）
         """
         # 调试日志
-        print(f"[EventBus DEBUG] emit called: type={event.type.value}, agent_id={event.agent_id}")
-        print(f"[EventBus DEBUG] _async_listeners id={id(self._async_listeners)}, keys={list(self._async_listeners.keys())}")
+        信息(f"[EventBus DEBUG] emit called: type={event.type.value}, agent_id={event.agent_id}")
+        信息(f"[EventBus DEBUG] _async_listeners id={id(self._async_listeners)}, keys={list(self._async_listeners.keys())}")
         
         # 确定写入哪个 Agent 的事件文件
         agent_id = event.agent_id or "main"
@@ -365,16 +365,16 @@ class EventBus:
                 else:
                     callback(event)
             except Exception as e:
-                print(f"EventBus subscriber error: {e}")
+                error(f"EventBus subscriber error: {e}")
         
         # 通知异步监听器（新增）
-        print(f"[EventBus DEBUG] 准备通知 {len(self._async_listeners)} 个异步监听器")
+        信息(f"[EventBus DEBUG] 准备通知 {len(self._async_listeners)} 个异步监听器")
         for listener_id, callback in self._async_listeners.items():
-            print(f"[EventBus DEBUG]   -> 通知监听器: {listener_id}")
+            信息(f"[EventBus DEBUG]   -> 通知监听器: {listener_id}")
             try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback(event)
                 else:
                     callback(event)
             except Exception as e:
-                print(f"EventBus async listener error: {e}")
+                error(f"EventBus async listener error: {e}")

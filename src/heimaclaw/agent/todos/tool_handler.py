@@ -143,7 +143,7 @@ async def write_todos_handler(todos: list[dict[str, Any]]) -> str:
                 )
                 services_registered.append(todo["service_name"])
             except Exception as e:
-                print(f"[write_todos] 服务注册失败: {e}")
+                error(f"[write_todos] 服务注册失败: {e}")
     
     # 统计
     completed = len([t for t in updated_todos if t.get("status") == "completed"])

@@ -68,7 +68,7 @@ class ExecTool:
         
         if policy_result.action == PolicyAction.ASK:
             # 未知工具，打印警告但仍然执行（向后兼容）
-            print(f"[Tool Policy] ⚠️ {policy_result.reason} - 仍尝试执行")
+            warning(f"[Tool Policy] ⚠️ {policy_result.reason} - 仍尝试执行")
         
         # ========== Step 2: 文件存在性预检 ==========
         pre_check_match = re.match(r'(?:python3?\s+)(.+?\.py)(?:\s|$)', command.strip())
@@ -178,7 +178,7 @@ async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> st
                 timeout_ms=timeout * 1000,
             )
             
-            print(f"[EXEC-SANDBOX] 在沙箱 {registry.sandbox_instance_id} 执行: {command[:100]}...")
+            info(f"[EXEC-SANDBOX] 在沙箱 {registry.sandbox_instance_id} 执行: {command[:100]}...")
             
             if result.exit_code == 0:
                 return result.stdout
@@ -186,10 +186,10 @@ async def exec_handler(command: str, timeout: int = 30, cwd: str = "/tmp") -> st
                 return f"[沙箱错误 {result.exit_code}]\n{result.stderr}\n{result.stdout}"
                 
         except Exception as e:
-            print(f"[EXEC-SANDBOX] 沙箱执行失败，回退到本地: {e}")
+            info(f"[EXEC-SANDBOX] 沙箱执行失败，回退到本地: {e}")
     
     # 本地执行 (Fallback)
-    print(f"[EXEC-LOCAL] 执行命令: {command[:200]}")
+    info(f"[EXEC-LOCAL] 执行命令: {command[:200]}")
     
     tool = ExecTool()
     result = await tool.execute(command, timeout, cwd)

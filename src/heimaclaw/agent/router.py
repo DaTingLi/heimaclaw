@@ -9,6 +9,7 @@ Agent 路由器 v2.0
 """
 
 import json
+from heimaclaw.console import error
 import re
 from pathlib import Path
 from typing import Optional
@@ -56,7 +57,7 @@ class AgentRouter:
             with open(self._bindings_file, "w", encoding="utf-8") as f:
                 json.dump(self._bindings, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存绑定配置失败: {e}")
+            error(f"保存绑定配置失败: {e}")
 
     def _load_group_configs(self) -> None:
         """加载群组多 Agent 配置"""
@@ -73,7 +74,7 @@ class AgentRouter:
             with open(self._groups_config_file, "w", encoding="utf-8") as f:
                 json.dump(self._group_configs, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存群组配置失败: {e}")
+            error(f"保存群组配置失败: {e}")
 
     def parse_mentions(self, content: str) -> list[str]:
         """
