@@ -139,7 +139,7 @@ def _register_all_tools():
         parameters=upload_def["parameters"],
         timeout_ms=10000,
     )
-    print(f"注册工具: {upload_def['name']} (async=False)")
+    info(f"注册工具: {upload_def['name']} (async=False)")
 
     # feishu_doc 工具
     registry.register(
@@ -149,7 +149,7 @@ def _register_all_tools():
         parameters=FEISHU_DOC_TOOL_DEFINITION["parameters"],
         timeout_ms=30000,
     )
-    print(f"注册工具: {FEISHU_DOC_TOOL_DEFINITION['name']} (async=False)")
+    info(f"注册工具: {FEISHU_DOC_TOOL_DEFINITION['name']} (async=False)")
 
     # docker_project 工具
     from heimaclaw.agent.tools.docker_tool import DOCKER_TOOL_DEFINITION, docker_project_handler
@@ -160,7 +160,7 @@ def _register_all_tools():
         parameters=DOCKER_TOOL_DEFINITION["parameters"],
         timeout_ms=30000,
     )
-    print(f"注册工具: {DOCKER_TOOL_DEFINITION['name']} (async=False)")
+    info(f"注册工具: {DOCKER_TOOL_DEFINITION['name']} (async=False)")
 
     # snapshot 快照工具
     from heimaclaw.agent.tools.snapshot_tool import SNAPSHOT_TOOL_DEFINITION, snapshot_handler
@@ -172,7 +172,7 @@ def _register_all_tools():
         timeout_ms=60000,
     )
     snapshot_name = SNAPSHOT_TOOL_DEFINITION['name']
-    print(f'注册工具: {snapshot_name} (async=False)')
+    info(f'注册工具: {snapshot_name} (async=False)')
 
     # monitor 监控工具
     from heimaclaw.agent.tools.monitor_tool import MONITOR_TOOL_DEFINITION, monitor_handler
@@ -184,7 +184,7 @@ def _register_all_tools():
         timeout_ms=30000,
     )
     monitor_name = MONITOR_TOOL_DEFINITION['name']
-    print(f'注册工具: {monitor_name} (async=False)')
+    info(f'注册工具: {monitor_name} (async=False)')
 
 
 class AgentRunner:
@@ -310,7 +310,7 @@ class AgentRunner:
                     llm_base_url = 'https://open.bigmodel.cn/api/coding/paas/v4/'
                     llm_api_key = '1234567890'
                     llm_model = 'glm-5'
-                    print(f"[Runner] Warning: _llm_adapter.config not found, using defaults")
+                    warning(f"[Runner] Warning: _llm_adapter.config not found, using defaults")
                 
                 try:
                     # 获取显示名称（用于对外身份）
@@ -328,9 +328,9 @@ class AgentRunner:
                         asyncio.ensure_future(self._deep_agent.initialize())
                     else:
                         loop.run_until_complete(self._deep_agent.initialize())
-                    print("[Runner] DeepAgents 初始化成功")
+                    info("[Runner] DeepAgents 初始化成功")
                 except Exception as e:
-                    print(f"[Runner] DeepAgents 初始化失败: {e}")
+                    error(f"[Runner] DeepAgents 初始化失败: {e}")
                     self._deep_agent = None
 
                 # 保留 ReActEngine 作为后备
