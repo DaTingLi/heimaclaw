@@ -656,17 +656,17 @@ class AgentRunner:
                 # 限制历史消息数量，避免 context 膨胀导致超时
                 history_for_deepagents = history[-MAX_DEEPAGENTS_HISTORY:] if len(history) > MAX_DEEPAGENTS_HISTORY else history
                 if len(history) > MAX_DEEPAGENTS_HISTORY:
-                    print(f"[Runner] 历史消息已压缩: {len(history)} -> {len(history_for_deepagents)} 条")
-                print(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history_for_deepagents)} 条")
+                    info(f"[Runner] 历史消息已压缩: {len(history)} -> {len(history_for_deepagents)} 条")
+                info(f"[Runner] 使用 DeepAgents 执行，记忆历史 {len(history_for_deepagents)} 条")
                 
                 import asyncio
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(None, self._deep_agent.run, history_for_deepagents)
                 
-                print(f"[Runner] DeepAgents 结果: {str(result)[:100]}...")
+                info(f"[DEBUG] DeepAgents 结果: {str(result)[:100]}...")
                 return result
             except Exception as e:
-                print(f"[Runner] DeepAgents 执行失败: {e}，使用原有引擎")
+                error(f"[Runner] DeepAgents 执行失败: {e}，使用原有引擎")
 
         # 使用 ReAct 引擎执行
         if self._react_engine and self._llm_adapter:
