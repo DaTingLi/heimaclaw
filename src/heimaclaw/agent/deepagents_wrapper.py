@@ -69,7 +69,7 @@ class DeepAgentsWrapper:
                         env=os.environ.copy(),
                     )
                     from heimaclaw.console import console
-                    console.print("\n[blue bold][Sandbox: Docker] 正在使用 Docker 容器隔离执行[/blue bold]\n")
+                    info("\n[Sandbox: Docker] 正在使用 Docker 容器隔离执行\n")
                 else:
                     backend = FirecrackerDeepAgentsBackend(
                         root_dir=project_dir,
@@ -79,7 +79,7 @@ class DeepAgentsWrapper:
                         virtual_mode=False,
                     )
                     from heimaclaw.console import console
-                    console.print("\n[blue bold][Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行[/blue bold]\n")
+                    info("\n[Sandbox: Firecracker] 正在使用硬件级沙箱隔离执行\n")
             else:
                 from deepagents.backends import LocalShellBackend
                 
@@ -93,7 +93,7 @@ class DeepAgentsWrapper:
                     virtual_mode=True,
                 )
                 from heimaclaw.console import console
-                console.print("\n[magenta bold][Sandbox: Local Process] 正在使用本地子进程执行（无沙箱隔离）[/magenta bold]\n")
+                info("\n[Sandbox: Local Process] 正在使用本地子进程执行（无沙箱隔离）\n")
 
             # 根据 agent_name 生成专属 system prompt（使用模板）
             agent_system_prompt = SYSTEM_PROMPT.format(agent_name=self.agent_name)
@@ -114,21 +114,21 @@ class DeepAgentsWrapper:
                     if not hasattr(self, '_init_task') or self._init_task is None or self._init_task.done():
                         self._init_task = asyncio.ensure_future(self.initialize())
                         # Don't block - let it run in background
-                        print("[DeepAgentsWrapper] 初始化已在后台启动", flush=True)
+                        info("[DeepAgentsWrapper] 初始化已在后台启动")
                 else:
                     loop.run_until_complete(self.initialize())
             except RuntimeError:
                 asyncio.run(self.initialize())
             except Exception as e:
-                print(f"[DeepAgentsWrapper] 初始化异常: {e}", flush=True)
+                error(f"[DeepAgentsWrapper] 初始化异常: {e}")
 
     def execute(self, user_message: str, history: list = None) -> str:
         """执行 Agent"""
         import sys
-        print(f"[DeepAgentsWrapper.execute] 调用, user_message={user_message[:30]}...", flush=True, file=sys.stderr)
+        info(f"[DEBUG] DeepAgentsWrapper.execute 调用, user_message={user_message[:30]}...")
         self._ensure_initialized()
         if self._agent is None:
-            print("[DeepAgentsWrapper.execute] _agent still None after _ensure_initialized!", flush=True, file=sys.stderr)
+            error("[DeepAgentsWrapper.execute] _agent still None after _ensure_initialized!")
             return "Agent 初始化失败"
         
         # 组装 messages
@@ -145,11 +145,11 @@ class DeepAgentsWrapper:
             messages.append(("human", enhanced_message))
             
         try:
-            print(f"[DeepAgentsWrapper.execute] 调用 _agent.invoke, messages长度={len(messages)}", flush=True, file=sys.stderr)
+            info(f"[DEBUG] DeepAgentsWrapper.execute 调用 _agent.invoke, messages长度={len(messages)}")
             result = self._agent.invoke(
                 {"messages": messages}
             )
-            print(f"[DeepAgentsWrapper.execute] invoke完成, result类型={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}", flush=True, file=sys.stderr)
+            info(f"[DEBUG] DeepAgentsWrapper.execute invoke完成, result类型={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}")
             # DeepAgents 返回格式可能是 {'messages': [...]} 或 {'output': '...'}
             if isinstance(result, dict):
                 if 'output' in result:
@@ -178,10 +178,10 @@ class DeepAgentsWrapper:
             Agent 响应文本
         """
         import sys
-        print(f"[DeepAgentsWrapper.run] 被调用, history长度={len(history) if history else 0}", flush=True, file=sys.stderr)
+        info(f"[DEBUG] DeepAgentsWrapper.run 被调用, history长度={len(history) if history else 0}")
         
         if not history:
-            print("[DeepAgentsWrapper.run] 历史为空，返回空字符串", flush=True, file=sys.stderr)
+            info("[DEBUG] DeepAgentsWrapper.run 历史为空，返回空字符串")
             return ""
 
         # 从历史中提取最后一条用户消息，前面的全部作为历史
@@ -218,7 +218,7 @@ class DeepAgentsWrapper:
             elif role in ["assistant", "ai"]:
                 chat_history.append(("ai", content))
 
-        print(f"[DeepAgentsWrapper.run] user_msg={user_message[:50]}...", flush=True, file=sys.stderr)
+        info(f"[DEBUG] DeepAgentsWrapper.run user_msg={user_message[:50]}...")
         return self.execute(user_message, history=chat_history)
 
 
